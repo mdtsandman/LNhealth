@@ -10,16 +10,24 @@
 (define gui:numtimes 4) ;; Number of time lines
 (define screenshot-time #f)
 (define quit-armed? #f)
-(define subject-location #f)
 
-;; Settings
-(define or-list (list))
-(define marker-strings (list
-  "Surgery start" "Initial lung retraction" "Ligation complete" (list "Sigh breath PIP:" #f)
-  "Surgery paused: Hypoxemia" "Surgery paused: Hypercarbia" "Surgery paused: Hemodynamic instability" (list "Surgery paused:" #f)
-  "Surgery resumed" (list "HFJV paused:" #f) "HFJV resumed" "Surgery end" "Leave OR"
-))
-(define rupi:hostname "bcch-or.part-dns.org")
+(define or-list (list))      ;; list of all monitoring locations
+(define subject-location #f) ;; monitoring location for current subject
+
+(define markers-timeline 
+  (list "Bronchoscopy started" "Bronchoscopy finished" "Intubation" "Incision" "Fistula ligation complete" "Surgery finished")
+)
+(define markers-events
+  (list (list "Surgery paused:" #f) "Surgery resumed" (list "HFJV paused:" #f) "HFJV resumed")
+)
+
+;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
+;(define rupi_port 8031)                       ;; prod
+
+(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
+(define rupi_port 8080)                       ;; demo
+
+(define scale 1) ;; GUI scale
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN GUI
@@ -30,66 +38,98 @@
 ;; The main gui parts: Logging list, Title row and all buttons are defined here.
 (define gui:main #f)
 (define (init-gui-main)
+  ;; Instantiate the gui
   (set! gui:main (make-glgui))
+  ;; Stamp with copyright image
   (glgui-pixmap gui:main 675 2 copyright.img)
-
-  (glgui-menubar gui:main 0 (- (glgui-height-get) 30) (glgui-width-get) 30)
-
+  ;; Menubar
+  (glgui-menubar gui:main 0 (- (glgui-height-get) 50) (glgui-width-get) 50)
   ;; Label in upper left corner
   (glgui-label gui:main 10 (- (glgui-height-get) 24 3) 350 24 "HFJV Data Logger" ascii_24.fnt White)
-
   ;; Clock in upper right corner
   (set! clock (glgui-label gui:main (- (glgui-width-get) 70) (- (glgui-height-get) 24) 60 16 "" ascii_16.fnt White))
 
-  ;; Logging buttons
-  (let loop ((i 0))
-    (if (< i (/ (length marker-strings) 5))
-      (let ((w 140) (x 20) (y (- (glgui-height-get) 485 230)))
-        (let loop2 ((k 0))
-          (if (and (< k 5) (< (+ (* i 5) k) (length marker-strings)))
-            (let ((str0 (list-ref marker-strings (+ (* i 5) k))))
-              (if str0 (let ((str (if (list? str0) (car str0) str0))
-                             (cb (if (list? str0) marker-freetext-callback marker-callback))
-                             (cl (list? str0)))
-                (set! bs (glgui-button-string gui:main (+ x (* (+ w 20) k)) (- y (* 35 i))
-                            w 30 str ascii_16.fnt cb))
-                (glgui-widget-set! gui:main bs 'value -1)
-                (if cl (glgui-widget-set! gui:main bs 'color Pink))
-              ))
-              (loop2 (fx+ k 1))
+  ;; Timeline buttons
+  (let ([w 140] [x 1150] [y (- (glgui-height-get) 85) ])
+    (let loop ([i 0])
+      (if (< i (length markers-timeline))
+        (let ([marker (list-ref markers-timeline i)])
+          (if marker
+            (let (
+              [str (if (list? marker) (car marker) marker)]
+              [cb (if (list? marker) marker-freetext-callback marker-callback)]
+              [cl (list? marker)])
+              (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt cb))
+              (glgui-widget-set! gui:main bs 'value -1)
+              (if cl (glgui-widget-set! gui:main bs 'color Pink))
             )
+            ;; else do nothing
           )
+          (loop (+ i 1))
         )
-        (loop (+ i 1))
+        ;; else do nothing
       )
     )
   )
 
+  ;; Event buttons
+  (let ([w 140] [x 1150] [y (- (glgui-height-get) 100 (* 35 6)) ])
+    (let loop ([i 0])
+      (if (< i (length markers-events))
+        (let ([marker (list-ref markers-events i)])
+          (if marker
+            (let ([cl (list? marker)])
+              (let 
+                ([str (if cl (car marker) marker)] [cb (if cl marker-freetext-callback marker-callback)])
+                (set! bs 
+                  (
+                    glgui-button-string
+                    gui:main
+                    x
+                    (- y (* 35 i))
+                    w
+                    30
+                    str
+                    ascii_16.fnt
+                    cb
+                  )
+                )
+                (glgui-widget-set! gui:main bs 'value -1)
+              )
+            )
+            ;; else do nothing
+          )
+          (loop (+ i 1))
+        )
+        ;; else do nothing
+      )
+    )
+  )
 
   ;; Logging List
-  (let ((x 525)(y (- (glgui-height-get) 50)) (w 460))
+  (let ( [x 600] [y (- (glgui-height-get) 50 )] [w 500] [num_rows 25] [row_height 30] )
     ;;Header row
-    (glgui-label gui:main (+ x 5) y 70 16 "Time" ascii_16.fnt White)
-    (glgui-label gui:main (+ x 75) y (- (glgui-width-get) 75 5) 16 "Log Entry" ascii_16.fnt White)
-    ;;The actual list itself
-    (set! log-list
-      (glgui-list gui:main x (- y 5 (* 15 30)) w (* 15 30) 30 (build-log-list) #f)
-    )
+    (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
+    (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
     ;;Text Entry String
-    (set! text (glgui-label gui:main (+ x 5) (- y 5 34 (* 15 30)) w 24 "" ascii_24.fnt White))
+    (set! text (glgui-label gui:main x (- y row_height) w row_height "" ascii_24.fnt Black White ))
+    ;;The actual list 
+    (set! log-list
+      (glgui-list gui:main x (- y (* (+ num_rows 1) row_height)) w (* num_rows row_height) row_height (build-log-list) #f)
+    )
   )
-)
+
+) ;; end of init-gui-main definition
 
 ;; Other markers
 (define (marker-callback g w t x y)
-  (let* ((idx (glgui-widget-get g w 'value))
-         (marker (car (glgui-widget-get g w 'image))))
+  (let* ([idx (glgui-widget-get g w 'value)] [marker (car (glgui-widget-get g w 'image))])
     (store-event-add store 0 marker)
     (store-set! store "EventMarker" 1.)
     (set! quit-armed? #f)
     (glgui-widget-set! gui:main log-list 'list (build-log-list))
     ;; Arm screenshot
-    (if (string=? marker (car (reverse marker-strings)))
+    (if (string=? marker (car (reverse markers-timeline)))
       (set! screenshot-time (fl+ ##now 30.))
     )
   )
@@ -97,10 +137,23 @@
 )
 
 (define (marker-freetext-callback g w t x y)
-  (let* ((idx (glgui-widget-get g w 'value))
-         (marker (car (glgui-widget-get g w 'image))))
+  (let* ([idx (glgui-widget-get g w 'value)] [marker (car (glgui-widget-get g w 'image))])
     (set! buf (string-append marker " "))
     (glgui-widget-set! g text 'label buf)
+                  
+    (set! text 
+      (
+        glgui-label           ;; Create a Label widget from a string 
+        gui:main              ;; The Graphical User Interface (GUI) belonging to this widget
+        (+ x w 5)             ;; The lower left corner along the x-axis in pixels
+        (- y 100 (* 35 6))    ;; The lower left corner along the y-axis in pixels
+        250                   ;; The width of the element in pixels
+        24                    ;; The height of the element in pixels
+        ""                    ;; The label string
+        ascii_24.fnt          ;; The font used to render the label string
+        White                 ;; The widget color
+      )
+    )
   )
 )
 
@@ -112,7 +165,7 @@
     (if logs
       (let loop ((i 0) (result (list)))
         (if (= i (length logs)) result
-	   (loop (+ i 1)(append result (list (log-list-element (list-ref logs i)))))
+          (loop (+ i 1)(append result (list (log-list-element (list-ref logs i)))))
         )
       )
       (list)
@@ -134,29 +187,33 @@
 ;;  SETUP GUI
 ;; -----------------------------------------------------------------------------
 (define (init-gui-setup)
-  (let ((x 575)(y 350) (h 240) (w 360))
-    (set! gui:setup (glgui-container gui:main x y w h))
-    (glgui-box gui:setup 0 0 w h Navy)
-    (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
-    (glgui-widget-set! gui:setup setup-label 'align GUI_ALIGNCENTER)
-    (glgui-label gui:setup 5 (- h 40 30) 195 30 "Subject No: BCCH-" ascii_24.fnt White)
-    (set! setup-subjno (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
-                                         "" ascii_24.fnt White (color-shade White 0.2)))
-    (glgui-label gui:setup 5 (- h 40 (* 30 2)) 100 30 "Age:" ascii_24.fnt White)
-    (set! setup-age (glgui-inputlabel gui:setup (+ 5 195) (- h 40 (* 30 1) 25) 60 25
-                                      "" ascii_24.fnt White (color-shade White 0.2)))
-    (glgui-label gui:setup 5 (- h 40 (* 30 3)) 100 30 "Gender:" ascii_24.fnt White)
-    (set! setup-gender (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
-                                            (list "Male" "Female") ascii_24.fnt #f))
-    (glgui-label gui:setup 5 (- h 40 (* 30 4) 5) 100 30 "Location:" ascii_24.fnt White)
-    (set! location-label (glgui-dropdownbox gui:setup (+ 5 195) (- h 40 (* 30 3) 25 10) 150 35
-      (map (lambda (str) (lambda (lg lw x y w h s)
-        (if s (glgui:draw-box x y w h Grey))
-          (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)))
-        or-list)
-      Black DarkGrey Blue))
-    (glgui-widget-set! gui:setup location-label 'callback location-callback)
-    (glgui-button-string gui:setup 90 5 180 40 "Start Recording" ascii_24.fnt start-callback)
+  (let ([w0 360] [h0 240])
+    (let ([x0 (- (/ (glgui-width-get) 2) (/ w0 2))] [y0 (- (/ (glgui-height-get) 2) (/ h0 2))])
+      (let ([x (* scale x0)] [y (* scale y0)] [h (* scale h0)] [w (* scale w0)])
+        (set! gui:setup (glgui-container gui:main x y w h))
+        (glgui-box gui:setup 0 0 w h Navy)
+        (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
+        (glgui-widget-set! gui:setup setup-label 'align GUI_ALIGNCENTER)
+        (glgui-label gui:setup 5 (- h 40 30) 195 30 "Subject No: BCCH-" ascii_24.fnt White)
+        (set! setup-subjno (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
+                                           "" ascii_24.fnt White (color-shade White 0.2)))
+        (glgui-label gui:setup 5 (- h 40 (* 30 2)) 100 30 "Age:" ascii_24.fnt White)
+        (set! setup-age (glgui-inputlabel gui:setup (+ 5 195) (- h 40 (* 30 1) 25) 60 25
+                                        "" ascii_24.fnt White (color-shade White 0.2)))
+        (glgui-label gui:setup 5 (- h 40 (* 30 3)) 100 30 "Sex:" ascii_24.fnt White)
+        (set! setup-gender (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
+                                              (list "Male" "Female") ascii_24.fnt #f))
+        (glgui-label gui:setup 5 (- h 40 (* 30 4) 5) 100 30 "Location:" ascii_24.fnt White)
+        (set! location-label (glgui-dropdownbox gui:setup (+ 5 195) (- h 40 (* 30 3) 25 10) 150 35
+          (map (lambda (str) (lambda (lg lw x y w h s)
+            (if s (glgui:draw-box x y w h Grey))
+              (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)))
+            or-list)
+          Black DarkGrey Blue))
+        (glgui-widget-set! gui:setup location-label 'callback location-callback)
+        (glgui-button-string gui:setup 90 5 180 40 "Start Recording" ascii_24.fnt start-callback)
+      )
+    )
   )
 )
 
@@ -165,14 +222,13 @@
 ;; Select the OR room to monitor
 (define (location-callback g w t x y)
   ;; Get data from rupi
-  (let* ((cur (glgui-widget-get g w 'current))
-         (location (list-ref or-list cur)))
-    (if subject-location
+  (let* ( [cur (glgui-widget-get g w 'current)] [location (list-ref or-list cur)] )
+    (if subject-location  ;; subject-location is a global var
       (begin
         (instance-setvar! store "VNmonitor" "Location" location)
         (store-clear! store (map car (store-listcat store "remote")))
       )
-      (make-instance store "VNmonitor" "vitalnode" `("Location" ,location) `("Hostname" ,rupi:hostname))
+      (make-instance store "VNmonitor" "vitalnode" `("Location" ,location) `("Hostname" ,rupi_hostname))
     )
     (set! subject-location location)
   )
@@ -239,11 +295,13 @@
 
 ;; Plotting functions
 (define (make-trends g x y0 s vars)
-  (let* ((w trend-len)
-         (h 75)
-         (y (- y0 h))
-         (ws trend-len)
-         (min_y 0))
+  (let* ( 
+          [w trend-len]
+          [h 75]
+          [y (- y0 h)]
+          [ws trend-len]
+          [min_y 0]
+        )
     (for-each (lambda (v)
       ;; Make trend plot
       (let* ((name (car v))
@@ -290,8 +348,8 @@
   )
 
   ;; Add a grid
-  (let* ((y (- (glgui-height-get) 50 (* 120 5)))
-         (h (* 120 5))
+  (let* ((y (- (glgui-height-get) 50 (* 120 6)))
+         (h (* 120 6))
          (w (+ trend-len 40))
          (num (fx- gui:numtimes 1))
          (bw 2))
@@ -310,7 +368,7 @@
 
 ;; (update-trends store)
 ;;
-;; Update the trends every delta time using data from STORE
+;; Update the trends every delta-time using data from STORE
 (define last-trend-update 0)
 (define show-recording-once #f)
 (define (update-trends store)
@@ -375,89 +433,175 @@
 ;;  MAIN PROGRAM
 ;; -----------------------------------------------------------------------------
 (main
-;; initialization
+  
+;; Initialize
   (lambda (w h)
-    (if (or (string=? (system-platform) "macosx")
-            (string=? (system-platform) "linux")
-            (string=? (system-platform) "win32")) (make-window 1000 800))
+    
+    (if 
+      (or 
+        (string=? (system-platform) "macosx")
+        (string=? (system-platform) "linux")
+        (string=? (system-platform) "win32")
+      ) 
+      (make-window (* scale 1600) (* scale 850)) ;; TODO: Obtain optimal window size from system
+    )
+    
     (glgui-orientation-set! GUI_LANDSCAPE)
+    
     ;; See if we can get a better list of OR names from the vitalnode
-    (let* ((rupi:addr (with-exception-catcher
+    (let* (
+        [rupi:addr (
+            with-exception-catcher
             (lambda (e) #f)
-            (lambda () (car (host-info-addresses (host-info rupi:hostname))))))
-           (rupi:port 8031)
-           (rupi:key (u8vector 77 71 148 114 103 101 115 31))
-           (rc (rupi-client 0 rupi:key rupi:addr rupi:port))
-           (rooms (rupi-cmd rc "GETOVERVIEW" "")))
+            (lambda () (car (host-info-addresses (host-info rupi_hostname))))
+          )
+        ]
+        [rupi:port rupi_port]
+        [rupi:key (u8vector 77 71 148 114 103 101 115 31)]
+        [rc (rupi-client 0 rupi:key rupi:addr rupi:port)]
+        [rooms (rupi-cmd rc "GETOVERVIEW" "")]
+      )
       (if (pair? rooms) (set! or-list (sort (map car rooms) string<?)))
     )
 
-    ;; Initialize the gui and the monitor connection
+    ;; Initialize the monitor connection
     (set! store (make-store "main"))
+    
+    ;; Initialize the gui
     (init-gui-main)
     (init-gui-setup)
     (init-gui-trends)
 
-    ;;Make sure that scheduler actually runs !!!
+    ;;Make sure that the scheduler actually runs !!!
     (scheduler-init)
+  
   )
-;; events
+
+#| Definitions from LNCONFIG.h
+
+// events
+#define EVENT_MOTION      1
+#define EVENT_KEYPRESS    2
+#define EVENT_KEYRELEASE  3
+#define EVENT_BUTTON1UP   4
+#define EVENT_BUTTON1DOWN 5
+#define EVENT_BUTTON2UP   6
+#define EVENT_BUTTON2DOWN 7
+#define EVENT_BUTTON3UP   8
+#define EVENT_BUTTON3DOWN 9
+#define EVENT_MULTITOUCH  18
+#define EVENT_CLOSE       14
+#define EVENT_REDRAW      15
+
+#define EVENT_SUSPEND     16
+#define EVENT_RESUME      17
+#define EVENT_IDLE        19
+
+#define EVENT_NOTIFICATION 20
+
+#define EVENT_BATTERY   32
+#define EVENT_ORIENTATION 33
+
+#define EVENT_DEBUG       64
+
+#define EVENT_INIT        127
+#define EVENT_TERMINATE   128
+
+// special keys
+#define EVENT_KEYENTER            1
+#define EVENT_KEYTAB              2
+#define EVENT_KEYBACKSPACE        3
+#define EVENT_KEYRIGHT            4
+#define EVENT_KEYLEFT             5
+#define EVENT_KEYUP               6
+#define EVENT_KEYDOWN             7
+#define EVENT_KEYESCAPE           8
+#define EVENT_KEYMENU             9
+#define EVENT_KEYBACK             10
+#define EVENT_KEYDELETE           11
+#define EVENT_KEYHOME             12
+#define EVENT_KEYEND              13
+
+// modifier keys (use `|` to send multiple)
+#define MODIFIER_CTRL_MAC   1 << 0
+#define MODIFIER_CTRL       1 << 1
+#define MODIFIER_CMD        MODIFIER_CTRL
+#define MODIFIER_ALT        1 << 2
+#define MODIFIER_OPT        MODIFIER_ALT
+#define MODIFIER_SHIFT      1 << 3
+#define MODIFIER_CAPS       1 << 4
+#define MODIFIER_FN         1 << 5
+
+// screen orientations
+#define GUI_PORTRAIT   1
+#define GUI_LANDSCAPE  2
+#define GUI_SEASCAPE   3
+#define GUI_UPSIDEDOWN 4
+
+|#
+
+;; Handle events
   (lambda (t x y)
     (update-trends "main")
     (update-values "main")
     ;; These are button presses
     (if (= t EVENT_KEYPRESS)
       (begin
-	(cond
-	  ((= x EVENT_KEYESCAPE)
-      (if quit-armed?
-        (terminate)
-        (begin
-          (set! quit-armed? #t)
-          (store-event-add store 1 "Press ESC again to quit!")
-          (glgui-widget-set! gui:main log-list 'list (build-log-list))
-        )
-      )
-    )
-	  ((and (>= x 32) (< x 127))
-	    (set! buf (string-append buf (string (integer->char x))))
-	  )
-	  ((= x 3) ;; This is backspace
-	    (if (> (string-length buf) 0) (set! buf (substring buf 0 (- (string-length buf) 1))))
-	  )
-    ((= x EVENT_KEYTAB) (for-each display (list (store-listcat "main" "remote") "\n")))
-	  ((= x 1) ;; This is return
-	    (begin
-	      (if (> (string-length buf) 0)
-		      ;; It there is data in the string log it.
-		      (begin
-            (store-event-add store 1 buf)
-		        (glgui-widget-set! gui:main log-list 'list (build-log-list))
-		      )
+	      (cond
+	        ((= x EVENT_KEYESCAPE) ;; This is ESC
+            (if quit-armed?
+              (terminate)
+              (begin
+                (set! quit-armed? #t)
+                (store-event-add store 1 "Press ESC again to quit!")
+                (glgui-widget-set! gui:main log-list 'list (build-log-list))
+              )
+            )
+          )
+	        ((and (>= x 32) (< x 127)) ;; All printable ASCII chars (127 = delete)
+	          (set! buf (string-append buf (string (integer->char x))))
+	        )
+	        ((= x EVENT_KEYBACKSPACE)
+	          (if (> (string-length buf) 0) (set! buf (substring buf 0 (- (string-length buf) 1))))
+	        )
+          ((= x EVENT_KEYTAB) (for-each display (list (store-listcat "main" "remote") "\n")))
+	        ((= x EVENT_KEYENTER)
+	          (begin
+	            (if (> (string-length buf) 0)
+		            ;; If there is data in the string log it
+		            (begin
+                  (store-event-add store 1 buf)
+		              (glgui-widget-set! gui:main log-list 'list (build-log-list))
+		            )
+	            )
+	            (set! buf "")
+	          )
+	        )
 	      )
-	      (set! buf "")
-	    )
-	  )
-	)
-	(glgui-widget-set! gui:main text 'label buf)
+        (glgui-widget-set! gui:main text 'label buf)
       )
     )
     (glgui-event (list gui:main gui:trends) t x y)
 
     ;; Garbage collect, sleep and iterate over new plugin data
     (##gc)                     ;; This calls the garbage collector
-    (thread-sleep! 0.005)        ;; Sleep for 5 usec
+    (thread-sleep! 0.005)      ;; Sleep for 5 microseconds
     (scheduler-iterate)
+  
   )
-;; termination
+
+;; Terminate
   (lambda ()
     (scheduler-endcase "main")
     (scheduler-cleanup)
     #t
   )
-;; suspend
+
+;; Suspend
   (lambda () (glgui-suspend))
-;; resume
+
+;; Resume
   (lambda () (glgui-resume))
 )
+
 ;; eof
