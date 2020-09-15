@@ -1,0 +1,8 @@
+cmssdc.ttf 16 "HR//bpm" label_hr
+cmssdc.ttf 16 "PR//bpm" label_pr
+cmssdc.ttf 16 "SpO\$_2\$" label_spo2
+cmssdc.ttf 16 "MAP//mmHg" label_map
+cmssdc.ttf 16 "sSO\$_2\$-1" label_rso21
+cmssdc.ttf 16 "rSO\$_2\$-2" label_rso22
+cmssdc.ttf 16 "tcpCO\$_2\$" label_tcpco2
+cmssdc.ttf 12 "HFJVDataLogger \copyright 2011-2020 UBC \&  BC Children's Hospital" copyright
