@@ -15,17 +15,17 @@
 (define subject-location #f) ;; monitoring location for current subject
 
 (define markers-timeline 
-  (list "Bronchoscopy started" "Bronchoscopy finished" "Intubation" "Incision" "Fistula ligation complete" "Surgery finished")
+  (list "Bronchoscopy started" "Bronchoscopy ended" "Intubation" "Incision" "Fistula ligation complete" "Surgery ended")
 )
 (define markers-events
   (list (list "Surgery paused:" #f) "Surgery resumed" (list "HFJV paused:" #f) "HFJV resumed")
 )
 
-;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
-;(define rupi_port 8031)                       ;; prod
+(define rupi_hostname "bcch-or.part-dns.org") ;; prod
+(define rupi_port 8031)                       ;; prod
 
-(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
-(define rupi_port 8080)                       ;; demo
+;(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
+;(define rupi_port 8080)                       ;; demo
 
 (define scale 1) ;; GUI scale
 
@@ -50,7 +50,7 @@
   (set! clock (glgui-label gui:main (- (glgui-width-get) 70) (- (glgui-height-get) 24) 60 16 "" ascii_16.fnt White))
 
   ;; Timeline buttons
-  (let ([w 140] [x 1150] [y (- (glgui-height-get) 85) ])
+  (let ([w 200] [x 1150] [y (- (glgui-height-get) 85) ])
     (let loop ([i 0])
       (if (< i (length markers-timeline))
         (let ([marker (list-ref markers-timeline i)])
@@ -73,7 +73,7 @@
   )
 
   ;; Event buttons
-  (let ([w 140] [x 1150] [y (- (glgui-height-get) 100 (* 35 6)) ])
+  (let ([w 200] [x 1150] [y (- (glgui-height-get) 100 (* 35 6)) ])
     (let loop ([i 0])
       (if (< i (length markers-events))
         (let ([marker (list-ref markers-events i)])
@@ -107,7 +107,7 @@
   )
 
   ;; Logging List
-  (let ( [x 600] [y (- (glgui-height-get) 50 )] [w 500] [num_rows 25] [row_height 30] )
+  (let ( [x 600] [y (- (glgui-height-get) 50 )] [w 500] [num_rows 24] [row_height 30] )
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
@@ -117,7 +117,7 @@
     (set! log-list
       (glgui-list gui:main x (- y (* (+ num_rows 1) row_height)) w (* num_rows row_height) row_height (build-log-list) #f)
     )
-  )
+  ) 
 
 ) ;; end of init-gui-main definition
 
@@ -279,18 +279,21 @@
 ;;  TREND GUI
 ;; -----------------------------------------------------------------------------
 (define gui:trends #f)
-;; Each trend has:
-;;   name vmin vmax color label.img storename yoffset trace-h traceoffset
-;; vmin and vmax are scales for Waveforms
+;; vmin and vmax define the scale for each waveform
 (define trends (list
-  (list "hr" 45 175 Green label_hr.img "HR" 1 130 1)
-  (list "pr" 45 175 DarkGreen label_pr.img "PRspo2" 1.3 130 1)
-  (list "map" 35 105 Red label_map.img  "ABPmean" 2 140 2)
-  (list "map_nibp" 35 105 IndianRed label_map.img "NBPmean" 2.3 140 2)
-  (list "spo2" 80 101 Aquamarine label_spo2.img "SpO2" 3 100 3)
-  (list "rso21" 80 101 Blue label_rso21.img "rSO2-1" 4 100 4)
-  (list "rso22" 80 101 LightBlue label_rso22.img "rSO2-2" 4.3 100 4)
-  (list "tcpco2" 80 101 Orange label_tcpco2.img "tcpCO2" 5 100 5)
+;;      name        vmin  vmax  color       label.img           storename yoffset trace-h traceoffset
+  (list "hr"        90    175   Green       label_hr.img        "HR"      0.8     100     1)
+  (list "pr"        90    175   DarkGreen   label_pr.img        "PRSpO2"  1.1     100     1)
+  (list "map"       35    105   Red         label_map_art.img   "ABPmean" 1.5     100     2)
+  (list "map_nibp"  35    105   IndianRed   label_map_nibp.img  "NBPmean" 1.8     100     2)
+  (list "spo2"      70    101   Aquamarine  label_spo2.img      "SpO2"    2.2     100     3)
+  (list "rso2_1"    50    101   Blue        label_rso2_1.img    "rSO2-1"  2.6     100     4)
+  (list "rso2_2"    50    101   LightBlue   label_rso2_2.img    "rSO2-2"  2.9     100     4)
+  (list "tcpco2"     0    121   Orange      label_tcpco2.img    "tcpCO2"  3.3     100     5)
+  (list "fio2_imv"  21    101   Blue        label_fio2imv.img   "FiO2IMV" 3.7     100     6)
+  (list "rr_imv"     0     61   White       label_rrimv.img     "RRIMV"   4.1     100     7)
+  (list "peep_imv"   0     36   White       label_peepimv.img   "PEEPIMV" 4.5     100     8)
+  (list "pip_imv"    0     36   White       label_pipimv.img    "PIPIMV"  4.8     100     8)
 ))
 
 ;; Plotting functions
@@ -303,57 +306,89 @@
           [min_y 0]
         )
     (for-each (lambda (v)
-      ;; Make trend plot
-      (let* ((name (car v))
-             (trace (string-append name "-trace"))
-             (wave (string-append name "-wave"))
-             (vmin (cadr v))
-             (vmax (caddr v))
-             (color (cadddr v))
-             (trace-h (list-ref v 7))
-             (traceoffset (list-ref v 8)))
-        ;; Define trace to plot waveform
-        (let ((trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)))
-          (store-set! s trace trc)
-          ;; Clear the trace
-          (gltrace:clear trc)
-          ;; Place the trace widget
-          (store-set! s wave (glgui-trace-slider g (+ x 5) (- (glgui-height-get) 50 (* 120 traceoffset)) (+ w 40) 110 trc color ascii_16.fnt))
+        ;; Make trend plot
+        (let* (
+            [name (car v)]
+            [trace (string-append name "-trace")]
+            [wave (string-append name "-wave")]
+            [vmin (cadr v)]
+            [vmax (caddr v)]
+            [color (cadddr v)]
+            [trace-h (list-ref v 7)]
+            [traceoffset (list-ref v 8)]
+          )
+          ;; Define trace to plot waveform
+          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
+            (store-set! s trace trc)
+            ;; Clear the trace
+            (gltrace:clear trc)
+            ;; Place the trace widget
+            (store-set! s wave (glgui-trace-slider g (+ x 5) (- (glgui-height-get) 50 (* 120 traceoffset)) (+ w 40) 110 trc color ascii_16.fnt))
+          )
+          (set! min_y (- (glgui-height-get) 50 (* 120 traceoffset)))
         )
-        (set! min_y (- (glgui-height-get) 50 (* 120 traceoffset)))
+        ;; Trend numbers
+        (let (
+            [value (string-append (car v) "-value")]
+            [color (cadddr v)]
+            [lbl (list-ref v 4)]
+            [yoffset (list-ref v 6)]
+          )
+          (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 120 yoffset)) lbl num_40.fnt color))
+        )
       )
-      ;; Trend numbers
-      (let ((value (string-append (car v) "-value"))
-            (color (cadddr v))
-            (lbl (list-ref v 4))
-            (yoffset (list-ref v 6)))
-        (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 120 yoffset))
-          lbl num_40.fnt color))
-      )
-    ) vars)
+      vars
+    )
     min_y
-  ))
+  )
+)
 
 (define (init-gui-trends)
+  
   (set! gui:trends (make-glgui))
   ;; Create trend numbers and waveforms
-  (set! gui:trends-h (make-trends gui:trends 0 (- (glgui-height-get) 30) store trends))
+  (set! gui:trends-h
+    (make-trends 
+      gui:trends 
+      0 
+      (- (glgui-height-get) 50) 
+      store 
+      trends
+    )
+  )
 
   ;; Marker trace
-  (let ((trace (make-gltrace trend-len 100 GLTRACE_SHIFT 0 1 0 1)))
-    (store-set! store "EventMarker-trace" trace)
+  (let ([trace (make-gltrace trend-len 100 GLTRACE_SHIFT 0 1 0 1)])
+    (store-set! 
+      store 
+      "EventMarker-trace" 
+      trace
+    )
     (gltrace:clear trace)
-    (store-set! store "EventMarker-wave" (glgui-trace gui:trends 5 gui:trends-h
-      (+ trend-len 40) (- (glgui-height-get) 30 gui:trends-h) trace Yellow))
+    (store-set! 
+      store 
+      "EventMarker-wave" 
+      (glgui-trace 
+        gui:trends 
+        5 
+        gui:trends-h
+        (+ trend-len 40) 
+        (- (glgui-height-get) 30 gui:trends-h ) 
+        trace
+        Yellow
+      )
+    )
   )
 
   ;; Add a grid
-  (let* ((y (- (glgui-height-get) 50 (* 120 6)))
-         (h (* 120 6))
-         (w (+ trend-len 40))
-         (num (fx- gui:numtimes 1))
-         (bw 2))
-    (let loop ((x 5) (i 0))
+  (let* (
+      [y (- (glgui-height-get) 50 (* 120 6))]
+      [h (* 120 6)]
+      [w (+ trend-len 40)]
+      [num (fx- gui:numtimes 1)]
+      [bw 2]
+    )
+    (let loop ([x 5] [i 0])
       (if (fx> i num) #f
         (begin
           (glgui-box gui:trends x y bw (+ h (if (fx= i 0) 120 0)) DimGray)
@@ -364,6 +399,7 @@
       )
     )
   )
+
 )
 
 ;; (update-trends store)
