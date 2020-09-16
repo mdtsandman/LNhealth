@@ -280,21 +280,23 @@
 ;; -----------------------------------------------------------------------------
 (define gui:trends #f)
 ;; vmin and vmax define the scale for each waveform
-(define trends (list
-;;      name        vmin  vmax  color       label.img           storename yoffset trace-h traceoffset
-  (list "hr"        90    175   Green       label_hr.img        "HR"      0.8     100     1)
-  (list "pr"        90    175   DarkGreen   label_pr.img        "PRSpO2"  1.1     100     1)
-  (list "map"       35    105   Red         label_map_art.img   "ABPmean" 1.5     100     2)
-  (list "map_nibp"  35    105   IndianRed   label_map_nibp.img  "NBPmean" 1.8     100     2)
-  (list "spo2"      70    101   Aquamarine  label_spo2.img      "SpO2"    2.2     100     3)
-  (list "rso2_1"    50    101   Blue        label_rso2_1.img    "rSO2-1"  2.6     100     4)
-  (list "rso2_2"    50    101   LightBlue   label_rso2_2.img    "rSO2-2"  2.9     100     4)
-  (list "tcpco2"     0    121   Orange      label_tcpco2.img    "tcpCO2"  3.3     100     5)
-  (list "fio2_imv"  21    101   Blue        label_fio2imv.img   "FiO2IMV" 3.7     100     6)
-  (list "rr_imv"     0     61   White       label_rrimv.img     "RRIMV"   4.1     100     7)
-  (list "peep_imv"   0     36   White       label_peepimv.img   "PEEPIMV" 4.5     100     8)
-  (list "pip_imv"    0     36   White       label_pipimv.img    "PIPIMV"  4.8     100     8)
-))
+(define trends 
+  (list
+;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
+    (list "hr"        90    175   Green       label_hr.img        "HR"        0.8      100      1)
+    (list "pulse"     90    175   DarkGreen   label_pulse.img     "PRSpO2"    1.1      100      1)
+    (list "map_art"   35    105   Red         label_map_art.img   "ABPmean"   1.5      100      2)
+    (list "map_nibp"  35    105   IndianRed   label_map_nibp.img  "NBPmean"   1.8      100      2)
+    (list "spo2"      70    101   Aquamarine  label_spo2.img      "SpO2"      2.2      100      3)
+    (list "rso2_1"    50    101   Blue        label_rso2_1.img    "rSO2-1"    2.6      100      4)
+    (list "rso2_2"    50    101   LightBlue   label_rso2_2.img    "rSO2-2"    2.9      100      4)
+    (list "pco2_tc"    0    121   Orange      label_pco2_tc.img   "tcpCO2"    3.3      100      5)
+    (list "fio2_imv"  21    101   Blue        label_fio2_imv.img  "FiO2"      3.7      100      6)
+    (list "rr_imv"     0     61   White       label_rr_imv.img    "RR"        4.1      100      7)
+    (list "peep_imv"   0     36   White       label_peep_imv.img  "PEEP"      4.5      100      8)
+    (list "pip_imv"    0     36   White       label_pip_imv.img   "PIP"       4.8      100      8)
+  )
+)
 
 ;; Plotting functions
 (define (make-trends g x y0 s vars)

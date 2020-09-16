@@ -1,5 +1,5 @@
 cmssdc.ttf 16 "HR [ECG]"                label_hr
-cmssdc.ttf 16 "Pulse [system]"          label_pr
+cmssdc.ttf 16 "Pulse [system]"          label_pulse
 cmssdc.ttf 16 "S\$_P\$O\$_2\$"          label_spo2
 cmssdc.ttf 16 "S\$_P\$O\$_2\$ [pre]"    label_spo2_pre
 cmssdc.ttf 16 "S\$_P\$O\$_2\$ [post]"   label_spo2_pre
@@ -7,9 +7,9 @@ cmssdc.ttf 16 "MAP [Art]"               label_map_art
 cmssdc.ttf 16 "MAP [NIBP]"              label_map_nibp
 cmssdc.ttf 16 "rSO\$_2\$ [1]"           label_rso2_1
 cmssdc.ttf 16 "rSO\$_2\$ [2]"           label_rso2_2
-cmssdc.ttf 16 "P\$_{TC}\$CO\$_2\$"      label_tcpco2
-cmssdc.ttf 16 "F\$_i\$O\$_2\$ [IMV]"    label_fio2imv
-cmssdc.ttf 16 "RR [IMV]"                label_rrimv
-cmssdc.ttf 16 "PEEP [IMV]"              label_peepimv
-cmssdc.ttf 16 "PIP [IMV]"               label_pipimv
+cmssdc.ttf 16 "P\$_{TC}\$CO\$_2\$"      label_pco2_tc
+cmssdc.ttf 16 "F\$_i\$O\$_2\$ [IMV]"    label_fio2_imv
+cmssdc.ttf 16 "RR [IMV]"                label_rr_imv
+cmssdc.ttf 16 "PEEP [IMV]"              label_peep_imv
+cmssdc.ttf 16 "PIP [IMV]"               label_pip_imv
 cmssdc.ttf 12 "HFJVDataLogger \copyright 2011-2020 UBC \&  BC Children's Hospital" copyright
