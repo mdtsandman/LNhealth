@@ -105,7 +105,7 @@
   )
 
   ;; Logging List
-  (let ( [x 950] [y (- (glgui-height-get) 50 )] [w 440] [num_rows 24] [row_height 30] )
+  (let ( [x 950] [y (- (glgui-height-get) 50 )] [w 440] [num_rows 23] [row_height 30] )
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
@@ -192,14 +192,14 @@
       (glgui-box gui:setup 0 0 w h Navy)
       (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
       (glgui-widget-set! gui:setup setup-label 'align GUI_ALIGNCENTER)
-      (glgui-label gui:setup 5 (- h 40 30) 195 30 "Subject No: BCCH-" ascii_24.fnt White)
-      (set! setup-subjno (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
+      (glgui-label gui:setup 5 (- h 40 30) 195 30 "Patient:" ascii_24.fnt White)
+      (set! setup-subjectnum (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
                                          "" ascii_24.fnt White (color-shade White 0.2)))
       (glgui-label gui:setup 5 (- h 40 (* 30 2)) 100 30 "Age:" ascii_24.fnt White)
       (set! setup-age (glgui-inputlabel gui:setup (+ 5 195) (- h 40 (* 30 1) 25) 60 25
                                       "" ascii_24.fnt White (color-shade White 0.2)))
       (glgui-label gui:setup 5 (- h 40 (* 30 3)) 100 30 "Sex:" ascii_24.fnt White)
-      (set! setup-gender (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
+      (set! setup-sex (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
                                             (list "Male" "Female") ascii_24.fnt #f))
       (glgui-label gui:setup 5 (- h 40 (* 30 4) 5) 100 30 "Location:" ascii_24.fnt White)
       (set! location-label (glgui-dropdownbox gui:setup (+ 5 195) (- h 40 (* 30 3) 25 10) 150 35
@@ -235,10 +235,10 @@
 ;;
 ;; Start Recording data
 (define (start-callback g w t x y)
-  (set! subject-no (string->number (glgui-widget-get gui:setup setup-subjno 'label)))
+  (set! subject-num (string->number (glgui-widget-get gui:setup setup-subjectnum 'label)))
   (set! subject-age (string->number (glgui-widget-get gui:setup setup-age 'label)))
-  (set! subject-gender (car (list-ref (glgui-widget-get gui:setup setup-gender 'image)
-                                 (glgui-widget-get gui:setup setup-gender 'value))))
+  (set! subject-sex (car (list-ref (glgui-widget-get gui:setup setup-sex 'image)
+                                   (glgui-widget-get gui:setup setup-sex 'value))))
   ;; Clear the comment string
   (set! buf "")
   (glgui-widget-set! gui:main text 'label buf)
@@ -247,7 +247,7 @@
     (set! subject-hasdata? (and (list? remote-lst) (not (null? remote-lst))))
   )
   ;; Check if we got everything set
-  (if (and subject-no subject-age subject-gender subject-hasdata?)
+  (if (and subject-num subject-age subject-sex subject-hasdata?)
     (begin
       ;; Record the trend variables
       (make-instance "main" "TRENDOUT" "trendoutput" `("Trends"
@@ -258,12 +258,12 @@
       )
       ;; Start the scheduler
       (scheduler-startcase store
-        (string-append "BCCH-" (number->string subject-no) "_" (time->timestamp (current-time))))
+        (string-append "BCCH-" (number->string subject-num) "_" (time->timestamp (current-time))))
       ;; Log the demographics
-      (store-event-add store 0 (string-append "SubjectNo: BCCH-" (number->string subject-no)
-                                              ",Location: " subject-location))
-      (store-event-add store 0 (string-append "Age: " (number->string subject-age)
-                                              ",Gender: " subject-gender))
+      (store-event-add store 0 (string-append "Patient: BCCH-" (number->string subject-num)))
+      (store-event-add store 0 (string-append "Location: " subject-location))
+      (store-event-add store 0 (string-append "Age: " (number->string subject-age)))
+      (store-event-add store 0 (string-append "Sex: " subject-sex))
       (glgui-widget-set! gui:main log-list 'list (build-log-list))
       ;; Hide the input box
       (glgui-widget-set! gui:main gui:setup 'hidden #t)
@@ -290,12 +290,12 @@
     (list "map_nibp"  25    100   IndianRed   label_map_nibp.img  "NBPmean"   2.3      90       2)
     (list "spo2"      70    100   Aquamarine  label_spo2.img      "SpO2"      3        90       3)
     (list "rso2_1"    50    100   Blue        label_rso2_1.img    "rSO2-1"    4        90       4)
-    (list "rso2_2"    50    100   LightBlue   label_rso2_2.img    "rSO2-2"    4        90       4)
+    (list "rso2_2"    50    100   LightBlue   label_rso2_2.img    "rSO2-2"    4.3      90       4)
     (list "pco2_tc"    0    150   Orange      label_pco2_tc.img   "tcpCO2"    5        90       5)
     (list "fio2_imv"  21    100   Blue        label_fio2_imv.img  "FiO2"      6        90       6)
     (list "rr_imv"     0     60   DimGray     label_rr_imv.img    "RR"        7        90       7)
-    (list "peep_imv"   0     35   White       label_peep_imv.img  "PEEP"      8        90       8)
-    (list "pip_imv"    0     35   White       label_pip_imv.img   "PIP"       8.3      90       8)
+    (list "pip_imv"    0     35   White       label_pip_imv.img   "PIP"       8        90       8)
+    (list "peep_imv"   0     35   White       label_peep_imv.img  "PEEP"      8.3      90       8)
   )
 )
 
