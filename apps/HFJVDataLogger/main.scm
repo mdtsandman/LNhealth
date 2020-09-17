@@ -27,8 +27,6 @@
 ;(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
 ;(define rupi_port 8080)                       ;; demo
 
-(define scale 1) ;; GUI scale
-
 ;; -----------------------------------------------------------------------------
 ;;  MAIN GUI
 ;; -----------------------------------------------------------------------------
@@ -187,32 +185,30 @@
 ;;  SETUP GUI
 ;; -----------------------------------------------------------------------------
 (define (init-gui-setup)
-  (let ([w0 360] [h0 240])
-    (let ([x0 (- (/ (glgui-width-get) 2) (/ w0 2))] [y0 (- (/ (glgui-height-get) 2) (/ h0 2))])
-      (let ([x (* scale x0)] [y (* scale y0)] [h (* scale h0)] [w (* scale w0)])
-        (set! gui:setup (glgui-container gui:main x y w h))
-        (glgui-box gui:setup 0 0 w h Navy)
-        (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
-        (glgui-widget-set! gui:setup setup-label 'align GUI_ALIGNCENTER)
-        (glgui-label gui:setup 5 (- h 40 30) 195 30 "Subject No: BCCH-" ascii_24.fnt White)
-        (set! setup-subjno (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
-                                           "" ascii_24.fnt White (color-shade White 0.2)))
-        (glgui-label gui:setup 5 (- h 40 (* 30 2)) 100 30 "Age:" ascii_24.fnt White)
-        (set! setup-age (glgui-inputlabel gui:setup (+ 5 195) (- h 40 (* 30 1) 25) 60 25
-                                        "" ascii_24.fnt White (color-shade White 0.2)))
-        (glgui-label gui:setup 5 (- h 40 (* 30 3)) 100 30 "Sex:" ascii_24.fnt White)
-        (set! setup-gender (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
-                                              (list "Male" "Female") ascii_24.fnt #f))
-        (glgui-label gui:setup 5 (- h 40 (* 30 4) 5) 100 30 "Location:" ascii_24.fnt White)
-        (set! location-label (glgui-dropdownbox gui:setup (+ 5 195) (- h 40 (* 30 3) 25 10) 150 35
-          (map (lambda (str) (lambda (lg lw x y w h s)
-            (if s (glgui:draw-box x y w h Grey))
-              (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)))
-            or-list)
-          Black DarkGrey Blue))
-        (glgui-widget-set! gui:setup location-label 'callback location-callback)
-        (glgui-button-string gui:setup 90 5 180 40 "Start Recording" ascii_24.fnt start-callback)
-      )
+  (let ([w 360] [h 240]) ;; dimensions of popup dialog for entry of setup info
+    (let ([x (- (/ (glgui-width-get) 2) (/ w 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup
+      (set! gui:setup (glgui-container gui:main x y w h))
+      (glgui-box gui:setup 0 0 w h Navy)
+      (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
+      (glgui-widget-set! gui:setup setup-label 'align GUI_ALIGNCENTER)
+      (glgui-label gui:setup 5 (- h 40 30) 195 30 "Subject No: BCCH-" ascii_24.fnt White)
+      (set! setup-subjno (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
+                                         "" ascii_24.fnt White (color-shade White 0.2)))
+      (glgui-label gui:setup 5 (- h 40 (* 30 2)) 100 30 "Age:" ascii_24.fnt White)
+      (set! setup-age (glgui-inputlabel gui:setup (+ 5 195) (- h 40 (* 30 1) 25) 60 25
+                                      "" ascii_24.fnt White (color-shade White 0.2)))
+      (glgui-label gui:setup 5 (- h 40 (* 30 3)) 100 30 "Sex:" ascii_24.fnt White)
+      (set! setup-gender (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
+                                            (list "Male" "Female") ascii_24.fnt #f))
+      (glgui-label gui:setup 5 (- h 40 (* 30 4) 5) 100 30 "Location:" ascii_24.fnt White)
+      (set! location-label (glgui-dropdownbox gui:setup (+ 5 195) (- h 40 (* 30 3) 25 10) 150 35
+        (map (lambda (str) (lambda (lg lw x y w h s)
+          (if s (glgui:draw-box x y w h Grey))
+            (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)))
+          or-list)
+        Black DarkGrey Blue))
+      (glgui-widget-set! gui:setup location-label 'callback location-callback)
+      (glgui-button-string gui:setup 90 5 180 40 "Start Recording" ascii_24.fnt start-callback)
     )
   )
 )
@@ -280,6 +276,10 @@
 ;; -----------------------------------------------------------------------------
 (define gui:trends #f)
 ;; vmin and vmax define the scale for each waveform
+;; label.img must correspond to an item in the file STRINGS
+;; yoffset is the vertical offset of the numeric where 1.0 represents the width of one trend band?
+;; traceh is the width of the trend band, in pixels?
+;; traceoffset is the ordinal vertical offset of the trace band to use for the waveform?
 (define trends 
   (list
 ;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
@@ -300,45 +300,45 @@
 
 ;; Plotting functions
 (define (make-trends g x y0 s vars)
-  (let* ( 
-          [w trend-len]
-          [h 75]
-          [y (- y0 h)]
-          [ws trend-len]
-          [min_y 0]
-        )
+  (let* ([w trend-len] [h 75] [y (- y0 h)] [ws trend-len] [min_y 0])
     (for-each (lambda (v)
-        ;; Make trend plot
-        (let* (
-            [name (car v)]
-            [trace (string-append name "-trace")]
-            [wave (string-append name "-wave")]
-            [vmin (cadr v)]
-            [vmax (caddr v)]
-            [color (cadddr v)]
-            [trace-h (list-ref v 7)]
-            [traceoffset (list-ref v 8)]
-          )
-          ;; Define trace to plot waveform
-          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
-            (store-set! s trace trc)
-            ;; Clear the trace
-            (gltrace:clear trc)
-            ;; Place the trace widget
-            (store-set! s wave (glgui-trace-slider g (+ x 5) (- (glgui-height-get) 50 (* 120 traceoffset)) (+ w 40) 110 trc color ascii_16.fnt))
-          )
-          (set! min_y (- (glgui-height-get) 50 (* 120 traceoffset)))
+      ;; Make trend plot
+      (let* ([name (car v)]                         ;; first element of main list
+             [vmin (cadr v)]                        ;; = (car (cdr v)) = second element of main list
+             [vmax (caddr v)]                       ;; = (car (cdr (cdr v) ) ) = third element ...
+             [color (cadddr v)]                     ;; = (car (cdr (cdr (cdr v) ) ) ) = fourth element ...
+             [trace-h (list-ref v 7)]               ;; seventh element of main list
+             [traceoffset (list-ref v 8)]           ;; eighth element of main list
+             [trace (string-append name "-trace")]
+             [wave (string-append name "-wave")])
+        ;; Define trace to plot waveform
+        (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
+          (store-set! s trace trc)
+          ;; Clear the trace
+          (gltrace:clear trc)
+          ;; Make a box
+          (glgui-box g (+ x 5) (- (glgui-height-get) 50 (* 120 traceoffset)) (+ w 40) 110 color)
+          ;; Place the trace widget
+          (store-set! s wave (
+            glgui-trace-slider                       
+              g                                     ;; GUI container widget 
+              (+ x 5)                               ;; LLC x-coord (pixels)
+              (- (glgui-height-get) 50 (* 120 traceoffset)) ;; LLC y-coord (pixels)
+              (+ w 40)                              ;; width (pixels)
+              110                                   ;; height (pixels)
+              trc                                   ;; data
+              color                               
+              ascii_16.fnt))
         )
-        ;; Trend numbers
-        (let (
-            [value (string-append (car v) "-value")]
+        (set! min_y (- (glgui-height-get) 50 (* 120 traceoffset)))
+      )
+      ;; Trend numbers
+      (let ([value (string-append (car v) "-value")]
             [color (cadddr v)]
             [lbl (list-ref v 4)]
-            [yoffset (list-ref v 6)]
-          )
-          (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 120 yoffset)) lbl num_40.fnt color))
-        )
-      )
+            [yoffset (list-ref v 6)])
+        (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 120 yoffset)) lbl num_40.fnt color))
+      ))
       vars
     )
     min_y
@@ -360,7 +360,16 @@
   )
 
   ;; Marker trace
-  (let ([trace (make-gltrace trend-len 100 GLTRACE_SHIFT 0 1 0 1)])
+  (let ([trace (
+    make-gltrace
+      trend-len           ;; Width
+      100                 ;; Height
+      GLTRACE_SHIFT       ;; Mode (SHIFT, OVERWRITE, RESET)
+      0                   ;; Lowest plotted value
+      1                   ;; Highest plotted value
+      0                   ;; Lower limit value, used if limit font set in glgui-trace
+      1)])                ;; Upper limit value, used if limit font set in glgui-trace
+  
     (store-set! 
       store 
       "EventMarker-trace" 
@@ -371,13 +380,13 @@
       store 
       "EventMarker-wave" 
       (glgui-trace 
-        gui:trends 
-        5 
-        gui:trends-h
-        (+ trend-len 40) 
-        (- (glgui-height-get) 30 gui:trends-h ) 
-        trace
-        Yellow
+        gui:trends        ;; GUI container widget                                         
+        5                 ;; Lower left corner along the x-axis in pixels
+        gui:trends-h      ;; Lower left corner along the x-axis in pixels
+        (+ trend-len 40)  ;; Width (pixels)
+        (- (glgui-height-get) 50 gui:trends-h ) ;; Height (pixels)
+        trace             ;; Data to be traced
+        Yellow            ;; Color
       )
     )
   )
@@ -445,10 +454,10 @@
     (begin
       ;; Update the Trend Numerics
       (for-each (lambda (trend)
-                  (let* ((name (car trend))
-                         (storename (list-ref trend 5))
-                         (val (store-timedref store storename #f))
-                         (label (store-ref store (string-append name "-value"))))
+                  (let* ([name (car trend)]
+                         [storename (list-ref trend 5)]
+                         [val (store-timedref store storename #f)]
+                         [label (store-ref store (string-append name "-value"))])
                     (glgui-widget-set! gui:trends label 'label (if val (number->string (fix val)) ""))))
                 trends)
       ;; Update times everywhere
@@ -481,7 +490,9 @@
         (string=? (system-platform) "linux")
         (string=? (system-platform) "win32")
       ) 
-      (make-window (* scale 1600) (* scale 850)) ;; TODO: Obtain optimal window size from system
+      ;; (1600 x 850) works for my X1 Carbon laptop
+      ;; TODO: Obtain optimal window size from system
+      (make-window (* 1600) (* 850))
     )
     
     (glgui-orientation-set! GUI_LANDSCAPE)
@@ -514,69 +525,6 @@
     (scheduler-init)
   
   )
-
-#| Definitions from LNCONFIG.h
-
-// events
-#define EVENT_MOTION      1
-#define EVENT_KEYPRESS    2
-#define EVENT_KEYRELEASE  3
-#define EVENT_BUTTON1UP   4
-#define EVENT_BUTTON1DOWN 5
-#define EVENT_BUTTON2UP   6
-#define EVENT_BUTTON2DOWN 7
-#define EVENT_BUTTON3UP   8
-#define EVENT_BUTTON3DOWN 9
-#define EVENT_MULTITOUCH  18
-#define EVENT_CLOSE       14
-#define EVENT_REDRAW      15
-
-#define EVENT_SUSPEND     16
-#define EVENT_RESUME      17
-#define EVENT_IDLE        19
-
-#define EVENT_NOTIFICATION 20
-
-#define EVENT_BATTERY   32
-#define EVENT_ORIENTATION 33
-
-#define EVENT_DEBUG       64
-
-#define EVENT_INIT        127
-#define EVENT_TERMINATE   128
-
-// special keys
-#define EVENT_KEYENTER            1
-#define EVENT_KEYTAB              2
-#define EVENT_KEYBACKSPACE        3
-#define EVENT_KEYRIGHT            4
-#define EVENT_KEYLEFT             5
-#define EVENT_KEYUP               6
-#define EVENT_KEYDOWN             7
-#define EVENT_KEYESCAPE           8
-#define EVENT_KEYMENU             9
-#define EVENT_KEYBACK             10
-#define EVENT_KEYDELETE           11
-#define EVENT_KEYHOME             12
-#define EVENT_KEYEND              13
-
-// modifier keys (use `|` to send multiple)
-#define MODIFIER_CTRL_MAC   1 << 0
-#define MODIFIER_CTRL       1 << 1
-#define MODIFIER_CMD        MODIFIER_CTRL
-#define MODIFIER_ALT        1 << 2
-#define MODIFIER_OPT        MODIFIER_ALT
-#define MODIFIER_SHIFT      1 << 3
-#define MODIFIER_CAPS       1 << 4
-#define MODIFIER_FN         1 << 5
-
-// screen orientations
-#define GUI_PORTRAIT   1
-#define GUI_LANDSCAPE  2
-#define GUI_SEASCAPE   3
-#define GUI_UPSIDEDOWN 4
-
-|#
 
 ;; Handle events
   (lambda (t x y)
