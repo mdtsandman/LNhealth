@@ -5,9 +5,9 @@
 ;; Global variables
 (define buf "")
 (define delta-update 10) ;;sec
-(define trend-time 3600) ;;sec
+(define trend-time 7200) ;;sec
 (define trend-len (fix (/ trend-time delta-update))) ;;sec
-(define gui:numtimes 4) ;; Number of time lines
+(define gui:numtimes 5) ;; Number of time lines
 (define screenshot-time #f)
 (define quit-armed? #f)
 
@@ -48,7 +48,7 @@
   (set! clock (glgui-label gui:main (- (glgui-width-get) 70) (- (glgui-height-get) 24) 60 16 "" ascii_16.fnt White))
 
   ;; Timeline buttons
-  (let ([w 200] [x 1150] [y (- (glgui-height-get) 85) ])
+  (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 85) ])
     (let loop ([i 0])
       (if (< i (length markers-timeline))
         (let ([marker (list-ref markers-timeline i)])
@@ -71,7 +71,7 @@
   )
 
   ;; Event buttons
-  (let ([w 200] [x 1150] [y (- (glgui-height-get) 100 (* 35 6)) ])
+  (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 100 (* 35 6)) ])
     (let loop ([i 0])
       (if (< i (length markers-events))
         (let ([marker (list-ref markers-events i)])
@@ -105,7 +105,7 @@
   )
 
   ;; Logging List
-  (let ( [x 600] [y (- (glgui-height-get) 50 )] [w 500] [num_rows 24] [row_height 30] )
+  (let ( [x 950] [y (- (glgui-height-get) 50 )] [w 440] [num_rows 24] [row_height 30] )
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
@@ -176,7 +176,7 @@
 ;; Draw a log-list element with data from the entry field
 (define (log-list-element entry)
   (lambda (g wgt x y w h s)
-    (glgui:draw-text-left (+ x 5) (+ y (/ (- h 16) 2)) 70 16 (seconds->string (car entry) "%T") ascii_16.fnt White)
+    (glgui:draw-text-left (+ x 15) (+ y (/ (- h 16) 2)) 70 16 (seconds->string (car entry) "%T") ascii_16.fnt White)
     (glgui:draw-text-left (+ x 75) (+ y (/ (- h 24) 2)) (- w 90) 24 (cadr entry) ascii_24.fnt White)
   )
 )
@@ -186,7 +186,8 @@
 ;; -----------------------------------------------------------------------------
 (define (init-gui-setup)
   (let ([w 360] [h 240]) ;; dimensions of popup dialog for entry of setup info
-    (let ([x (- (/ (glgui-width-get) 2) (/ w 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup
+    ;;(let ([x (- (/ (glgui-width-get) 2) (/ w 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup
+    (let ([x 990] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup
       (set! gui:setup (glgui-container gui:main x y w h))
       (glgui-box gui:setup 0 0 w h Navy)
       (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
@@ -275,32 +276,40 @@
 ;;  TREND GUI
 ;; -----------------------------------------------------------------------------
 (define gui:trends #f)
-;; vmin and vmax define the scale for each waveform
-;; label.img must correspond to an item in the file STRINGS
-;; yoffset is the vertical offset of the numeric where 1.0 represents the width of one trend band?
-;; traceh is the width of the trend band, in pixels?
-;; traceoffset is the ordinal vertical offset of the trace band to use for the waveform?
+;; vmin & vmax: define the scale for each waveform
+;; label.img:   must correspond to an item in the file STRINGS
+;; yoffset:     vertical offset of the numeric where 1.0 represents the width of one trend band?
+;; traceh:      width of the trend band, in pixels?
+;; traceoffset: ordinal vertical offset of the trace band to use for the waveform?
 (define trends 
   (list
 ;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
-    (list "hr"        90    175   Green       label_hr.img        "HR"        0.8      100      1)
-    (list "pulse"     90    175   DarkGreen   label_pulse.img     "PRSpO2"    1.1      100      1)
-    (list "map_art"   35    105   Red         label_map_art.img   "ABPmean"   1.5      100      2)
-    (list "map_nibp"  35    105   IndianRed   label_map_nibp.img  "NBPmean"   1.8      100      2)
-    (list "spo2"      70    101   Aquamarine  label_spo2.img      "SpO2"      2.2      100      3)
-    (list "rso2_1"    50    101   Blue        label_rso2_1.img    "rSO2-1"    2.6      100      4)
-    (list "rso2_2"    50    101   LightBlue   label_rso2_2.img    "rSO2-2"    2.9      100      4)
-    (list "pco2_tc"    0    121   Orange      label_pco2_tc.img   "tcpCO2"    3.3      100      5)
-    (list "fio2_imv"  21    101   Blue        label_fio2_imv.img  "FiO2"      3.7      100      6)
-    (list "rr_imv"     0     61   White       label_rr_imv.img    "RR"        4.1      100      7)
-    (list "peep_imv"   0     36   White       label_peep_imv.img  "PEEP"      4.5      100      8)
-    (list "pip_imv"    0     36   White       label_pip_imv.img   "PIP"       4.8      100      8)
+    (list "hr"        90    200   Green       label_hr.img        "HR"        1        90       1)
+    (list "pulse"     90    200   DarkGreen   label_pulse.img     "PRSpO2"    1.3      90       1)
+    (list "map_art"   25    100   Red         label_map_art.img   "ABPmean"   2        90       2)
+    (list "map_nibp"  25    100   IndianRed   label_map_nibp.img  "NBPmean"   2.3      90       2)
+    (list "spo2"      70    100   Aquamarine  label_spo2.img      "SpO2"      3        90       3)
+    (list "rso2_1"    50    100   Blue        label_rso2_1.img    "rSO2-1"    4        90       4)
+    (list "rso2_2"    50    100   LightBlue   label_rso2_2.img    "rSO2-2"    4        90       4)
+    (list "pco2_tc"    0    150   Orange      label_pco2_tc.img   "tcpCO2"    5        90       5)
+    (list "fio2_imv"  21    100   Blue        label_fio2_imv.img  "FiO2"      6        90       6)
+    (list "rr_imv"     0     60   DimGray     label_rr_imv.img    "RR"        7        90       7)
+    (list "peep_imv"   0     35   White       label_peep_imv.img  "PEEP"      8        90       8)
+    (list "pip_imv"    0     35   White       label_pip_imv.img   "PIP"       8.3      90       8)
   )
 )
 
 ;; Plotting functions
+
+;; g:     container widget
+;; x:     LLC x-coord (pixels)
+;; y0:    LLC y-coord (pixels)?
+;; s:     store
+;; vars:  list of all vars to be trended (name, vmin, vmax, color, label.img, storename, yoffset, trace-h, traceoffset)
 (define (make-trends g x y0 s vars)
-  (let* ([w trend-len] [h 75] [y (- y0 h)] [ws trend-len] [min_y 0])
+  (let* ([w trend-len] [h 100] [y (- y0 h)] [ws trend-len] [min_y 0])
+    ;; Draw top line
+    (glgui-box g (+ x 20) (- (glgui-height-get) 50) (+ w 40) 2 DimGray)
     (for-each (lambda (v)
       ;; Make trend plot
       (let* ([name (car v)]                         ;; first element of main list
@@ -317,27 +326,29 @@
           ;; Clear the trace
           (gltrace:clear trc)
           ;; Make a box
-          (glgui-box g (+ x 5) (- (glgui-height-get) 50 (* 120 traceoffset)) (+ w 40) 110 color)
+          ;;(glgui-box g (+ x 5) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 89 color)
+          ;; Draw a line
+          (glgui-box g (+ x 20) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 2 DimGray)
           ;; Place the trace widget
           (store-set! s wave (
             glgui-trace-slider                       
               g                                     ;; GUI container widget 
-              (+ x 5)                               ;; LLC x-coord (pixels)
-              (- (glgui-height-get) 50 (* 120 traceoffset)) ;; LLC y-coord (pixels)
+              (+ x 20)                              ;; LLC x-coord (pixels)
+              (- (glgui-height-get) 50 (* 90 traceoffset)) ;; LLC y-coord (pixels)
               (+ w 40)                              ;; width (pixels)
-              110                                   ;; height (pixels)
+              90                                    ;; height (pixels)
               trc                                   ;; data
               color                               
               ascii_16.fnt))
         )
-        (set! min_y (- (glgui-height-get) 50 (* 120 traceoffset)))
+        (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
       )
       ;; Trend numbers
       (let ([value (string-append (car v) "-value")]
             [color (cadddr v)]
             [lbl (list-ref v 4)]
             [yoffset (list-ref v 6)])
-        (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 120 yoffset)) lbl num_40.fnt color))
+        (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
       ))
       vars
     )
@@ -381,7 +392,7 @@
       "EventMarker-wave" 
       (glgui-trace 
         gui:trends        ;; GUI container widget                                         
-        5                 ;; Lower left corner along the x-axis in pixels
+        20                ;; Lower left corner along the x-axis in pixels
         gui:trends-h      ;; Lower left corner along the x-axis in pixels
         (+ trend-len 40)  ;; Width (pixels)
         (- (glgui-height-get) 50 gui:trends-h ) ;; Height (pixels)
@@ -393,18 +404,18 @@
 
   ;; Add a grid
   (let* (
-      [y (- (glgui-height-get) 50 (* 120 6))]
-      [h (* 120 6)]
+      [y (- (glgui-height-get) 50 (* 90 8))]
+      [h (* 90 8)]
       [w (+ trend-len 40)]
       [num (fx- gui:numtimes 1)]
       [bw 2]
     )
-    (let loop ([x 5] [i 0])
+    (let loop ([x 20] [i 0])
       (if (fx> i num) #f
         (begin
-          (glgui-box gui:trends x y bw (+ h (if (fx= i 0) 120 0)) DimGray)
+          (glgui-box gui:trends x y bw h DimGray)
           (store-set! store (string-append "time-" (number->string i))
-            (glgui-label gui:trends (if (fx< x 17) 0 (fx- x 17)) (fx- y 20) 60 16 "" ascii_16.fnt DarkGray))
+            (glgui-label gui:trends (if (fx< x 17) 0 (fx- x 17)) (fx- y 20) 60 16 "" ascii_16.fnt White))
           (loop (fx+ x (fix (/ w num))) (fx+ i 1))
         )
       )
