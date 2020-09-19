@@ -105,7 +105,7 @@
   )
 
   ;; Logging List
-  (let ( [x 950] [y (- (glgui-height-get) 50 )] [w 440] [num_rows 23] [row_height 30] )
+  (let ( [x 1000] [y (- (glgui-height-get) 50 )] [w 380] [num_rows 23] [row_height 30] )
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
@@ -185,31 +185,47 @@
 ;;  SETUP GUI
 ;; -----------------------------------------------------------------------------
 (define (init-gui-setup)
-  (let ([w 360] [h 240]) ;; dimensions of popup dialog for entry of setup info
-    ;;(let ([x (- (/ (glgui-width-get) 2) (/ w 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup
-    (let ([x 990] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup
+  (let ([w 300] [h 270]) ;; dimensions of popup dialog for entry of setup info
+    (let ([x (+ 1000 (/ (- 380 w) 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup over the log widget
       (set! gui:setup (glgui-container gui:main x y w h))
       (glgui-box gui:setup 0 0 w h Navy)
-      (set! setup-label (glgui-label gui:setup 20 (- h 30) (- w 40) 25 "Study Setup" ascii_24.fnt White))
-      (glgui-widget-set! gui:setup setup-label 'align GUI_ALIGNCENTER)
-      (glgui-label gui:setup 5 (- h 40 30) 195 30 "Patient:" ascii_24.fnt White)
-      (set! setup-subjectnum (glgui-inputlabel gui:setup (+ 5 195) (- h 40 25) 60 25
-                                         "" ascii_24.fnt White (color-shade White 0.2)))
-      (glgui-label gui:setup 5 (- h 40 (* 30 2)) 100 30 "Age:" ascii_24.fnt White)
-      (set! setup-age (glgui-inputlabel gui:setup (+ 5 195) (- h 40 (* 30 1) 25) 60 25
-                                      "" ascii_24.fnt White (color-shade White 0.2)))
-      (glgui-label gui:setup 5 (- h 40 (* 30 3)) 100 30 "Sex:" ascii_24.fnt White)
-      (set! setup-sex (glgui-button-string gui:setup (+ 5 195) (- h 40 (* 30 2) 25) 150 25
-                                            (list "Male" "Female") ascii_24.fnt #f))
-      (glgui-label gui:setup 5 (- h 40 (* 30 4) 5) 100 30 "Location:" ascii_24.fnt White)
-      (set! location-label (glgui-dropdownbox gui:setup (+ 5 195) (- h 40 (* 30 3) 25 10) 150 35
+
+      ;; title
+      (set! setup_label (glgui-label gui:setup 20 (- h 45) (- w 40) 25 "Study Setup" ascii_24.fnt White))
+      (glgui-widget-set! gui:setup setup_label 'align GUI_ALIGNCENTER)
+      
+      ;; patient
+      (set! id_label (glgui-label gui:setup 20 (- h 55 30) 100 30 "Patient: " ascii_24.fnt White))
+      (glgui-widget-set! gui:setup id_label 'align GUI_ALIGNRIGHT)
+      (set! setup_id (glgui-inputlabel gui:setup (+ 20 100) (- h 55 (* 30 0) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
+      (glgui-widget-set! gui:setup setup_id 'align GUI_ALIGNRIGHT)
+  
+      ;; age
+      (set! age_label (glgui-label gui:setup 20 (- h 55 (* 30 2)) 100 30 "Age: " ascii_24.fnt White))
+      (glgui-widget-set! gui:setup age_label 'align GUI_ALIGNRIGHT)
+      (set! setup_age (glgui-inputlabel gui:setup (+ 20 100) (- h 55 (* 30 1) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
+      (glgui-widget-set! gui:setup setup_age 'align GUI_ALIGNRIGHT)
+      
+      ;; sex
+      (set! sex_label (glgui-label gui:setup 20 (- h 55 (* 30 3)) 100 30 "Sex: " ascii_24.fnt White))
+      (glgui-widget-set! gui:setup sex_label 'align GUI_ALIGNRIGHT)
+      (set! setup_sex (glgui-button-string gui:setup (+ 20 100) (- h 55 (* 30 2) 25) (- w 40 100) 25 (list "Male" "Female") ascii_24.fnt #f))
+
+      ;; location list
+      (set! location-label (glgui-label gui:setup 20 (- h 55 (* 30 4) 5) 100 30 "Location: " ascii_24.fnt White))
+      (glgui-widget-set! gui:setup location-label 'align GUI_ALIGNRIGHT)
+      (set! location-dropdown (glgui-dropdownbox gui:setup (+ 20 100) (- h 55 (* 30 3) 25 10) (- w 40 100) 35
         (map (lambda (str) (lambda (lg lw x y w h s)
           (if s (glgui:draw-box x y w h Grey))
             (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)))
           or-list)
         Black DarkGrey Blue))
-      (glgui-widget-set! gui:setup location-label 'callback location-callback)
-      (glgui-button-string gui:setup 90 5 180 40 "Start Recording" ascii_24.fnt start-callback)
+      (glgui-widget-set! gui:setup location-dropdown 'callback location-callback)
+
+      ;; start button
+      (set! start_btn (glgui-button-string gui:setup (- (/ w 2) (/ 180 2)) 20 180 40 "Start Recording" ascii_24.fnt start-callback))
+      (glgui-widget-set! gui:setup start_btn 'align GUI_ALIGNCENTER)
+    
     )
   )
 )
@@ -235,10 +251,10 @@
 ;;
 ;; Start Recording data
 (define (start-callback g w t x y)
-  (set! subject-num (string->number (glgui-widget-get gui:setup setup-subjectnum 'label)))
-  (set! subject-age (string->number (glgui-widget-get gui:setup setup-age 'label)))
-  (set! subject-sex (car (list-ref (glgui-widget-get gui:setup setup-sex 'image)
-                                   (glgui-widget-get gui:setup setup-sex 'value))))
+  (set! subject-num (string->number (glgui-widget-get gui:setup setup_id 'label)))
+  (set! subject-age (string->number (glgui-widget-get gui:setup setup_age 'label)))
+  (set! subject-sex (car (list-ref (glgui-widget-get gui:setup setup_sex 'image)
+                                   (glgui-widget-get gui:setup setup_sex 'value))))
   ;; Clear the comment string
   (set! buf "")
   (glgui-widget-set! gui:main text 'label buf)
@@ -348,7 +364,7 @@
             [color (cadddr v)]
             [lbl (list-ref v 4)]
             [yoffset (list-ref v 6)])
-        (store-set! s value (glgui-valuelabel g (+ x w 100) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
+        (store-set! s value (glgui-valuelabel g (+ x w 175) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
       ))
       vars
     )
