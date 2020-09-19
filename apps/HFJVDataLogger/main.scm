@@ -70,6 +70,7 @@
     )
   )
 
+
   ;; Event buttons
   (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 100 (* 35 6)) ])
     (let loop ([i 0])
@@ -104,8 +105,9 @@
     )
   )
 
+
   ;; Logging List
-  (let ( [x 1000] [y (- (glgui-height-get) 50 )] [w 380] [num_rows 23] [row_height 30] )
+  (let ( [x 1000] [y (- (glgui-height-get) 50 )] [w 380] [num_rows 18] [row_height 30] )
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
@@ -138,20 +140,6 @@
   (let* ([idx (glgui-widget-get g w 'value)] [marker (car (glgui-widget-get g w 'image))])
     (set! buf (string-append marker " "))
     (glgui-widget-set! g text 'label buf)
-                  
-    (set! text 
-      (
-        glgui-label           ;; Create a Label widget from a string 
-        gui:main              ;; The Graphical User Interface (GUI) belonging to this widget
-        (+ x w 5)             ;; The lower left corner along the x-axis in pixels
-        (- y 100 (* 35 6))    ;; The lower left corner along the y-axis in pixels
-        250                   ;; The width of the element in pixels
-        24                    ;; The height of the element in pixels
-        ""                    ;; The label string
-        ascii_24.fnt          ;; The font used to render the label string
-        White                 ;; The widget color
-      )
-    )
   )
 )
 
@@ -324,8 +312,8 @@
 ;; vars:  list of all vars to be trended (name, vmin, vmax, color, label.img, storename, yoffset, trace-h, traceoffset)
 (define (make-trends g x y0 s vars)
   (let* ([w trend-len] [h 100] [y (- y0 h)] [ws trend-len] [min_y 0])
-    ;; Draw top line
-    (glgui-box g (+ x 20) (- (glgui-height-get) 50) (+ w 40) 2 DimGray)
+    ;; Draw a horizontal line above the top trace widget
+    (glgui-box g (+ x 20) (- (glgui-height-get) 50) (+ w 40) 1 DimGray)
     (for-each (lambda (v)
       ;; Make trend plot
       (let* ([name (car v)]                         ;; first element of main list
@@ -341,10 +329,8 @@
           (store-set! s trace trc)
           ;; Clear the trace
           (gltrace:clear trc)
-          ;; Make a box
-          ;;(glgui-box g (+ x 5) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 89 color)
-          ;; Draw a line
-          (glgui-box g (+ x 20) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 2 DimGray)
+          ;; Draw a horizontal line below the trace widget
+          (glgui-box g (+ x 20) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 1 DimGray)
           ;; Place the trace widget
           (store-set! s wave (
             glgui-trace-slider                       
@@ -359,7 +345,7 @@
         )
         (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
       )
-      ;; Trend numbers
+      ;; Show numeric(s) beside the appropriate trace widget(s)
       (let ([value (string-append (car v) "-value")]
             [color (cadddr v)]
             [lbl (list-ref v 4)]
@@ -424,7 +410,7 @@
       [h (* 90 8)]
       [w (+ trend-len 40)]
       [num (fx- gui:numtimes 1)]
-      [bw 2]
+      [bw 1]
     )
     (let loop ([x 20] [i 0])
       (if (fx> i num) #f
@@ -448,7 +434,7 @@
 (define (update-trends store)
   (if (> (- ##now last-trend-update) delta-update)
     (begin
-      ;; Update the Trend Traces including Marker lines
+      ;; Update the trend traces, including marker lines
       (for-each (lambda (trend)
                   (let* ((name (car trend))
                          (storename (list-ref trend 5))
@@ -479,7 +465,7 @@
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.))
               (store:instance-ref store "DispatchCount" 0.))
     (begin
-      ;; Update the Trend Numerics
+      ;; Update the trend numerics
       (for-each (lambda (trend)
                   (let* ([name (car trend)]
                          [storename (list-ref trend 5)]
