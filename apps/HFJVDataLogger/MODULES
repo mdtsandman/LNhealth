@@ -1,1 +1,1 @@
-config eventloop scheduler ln_glgui rupi ivueparser csv png timestamp
+config eventloop scheduler ln_store csv ln_glgui rupi ivueparser csv png timestamp

@@ -253,9 +253,24 @@
   ;; Check if we got everything set
   (if (and subject-num subject-age subject-sex subject-hasdata?)
     (begin
-      ;; Record the trend variables
-      (make-instance "main" "TRENDOUT" "trendoutput" `("Trends"
-        ,(append (list "time_str") (append ivue:physdatavalues_basic ivue:physdatavalues_aisys ivue:physdatavalues_nirs ivue:physdatavalues_tcco2))))
+
+      ;; Record the trend variables (trendoutput plugin)
+      (make-instance 
+        "main"                                ;; store name
+        "ALLTRENDS"                           ;; name of plugin instance
+        "trendoutput"                         ;; plugin name
+        `("Trends"                            ;; configuration options to be passed to plugin
+          ,(append (list "time_str")
+            (append 
+              ivue:physdatavalues_basic 
+              ivue:physdatavalues_aisys 
+              ivue:physdatavalues_nirs
+              ivue:physdatavalues_tcco2
+            )
+          )
+        )
+      )
+      
       ;; Record some waveforms
       (let ((waves (append ivue:waveform_basic ivue:waveforms_aisys)))
         (for-each (lambda (l) (make-instance "main" (string-append "WAVEOUT" l) "waveoutput" `("Source" ,l))) waves)
