@@ -5,6 +5,8 @@
 
 ;; Global variables
 (define buf "")
+(define cursor_pos 0)
+
 (define delta-update 10) ;;sec
 (define trend-time 7200) ;;sec
 (define trend-len (fix (/ trend-time delta-update))) ;;sec
@@ -72,7 +74,6 @@
     )
   )
 
-
   ;; Event buttons
   (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 100 (* 35 6)) ])
     (let loop ([i 0])
@@ -106,7 +107,6 @@
     )
   )
 
-
   ;; Logging List
   (let ( [x 1000] [y (- (glgui-height-get) 50 )] [w 380] [num_rows 18] [row_height 30] )
     
@@ -115,7 +115,7 @@
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
     
     ;;Text Entry String
-    (set! text (glgui-label gui:main x (- y row_height) w row_height "" ascii_24.fnt Black White ))
+    (set! text (glgui-label gui:main x (- y row_height) w row_height "" ascii_24.fnt Black CornflowerBlue ))
     
     ;;The actual list 
     (set! log-list
@@ -153,6 +153,7 @@
       [marker (car (glgui-widget-get g w 'image))]
     )    
     (set! buf (string-append marker " "))
+    (set! cursor_pos (string-length buf))
     (glgui-widget-set! g text 'label buf)
   )
 )
@@ -237,7 +238,10 @@
 ;; Select the OR room to monitor
 (define (location-callback g w t x y)
   ;; Get data from rupi
-  (let* ( [cur (glgui-widget-get g w 'current)] [location (list-ref or-list cur)] )
+  (let* (
+      [cur (glgui-widget-get g w 'current)]
+      [location (list-ref or-list cur)]
+    )
     (if subject-location  ;; subject-location is a global var
       (begin
         (instance-setvar! store "VNmonitor" "Location" location)
@@ -253,19 +257,26 @@
 ;;
 ;; Start Recording data
 (define (start-callback g w t x y)
+  
+  (display "start-callback : begin\n")
+
   (set! subject-num (string->number (glgui-widget-get gui:setup setup_id 'label)))
   (set! subject-age (string->number (glgui-widget-get gui:setup setup_age 'label)))
   (set! subject-sex (car (list-ref (glgui-widget-get gui:setup setup_sex 'image)
                                    (glgui-widget-get gui:setup setup_sex 'value))))
   ;; Clear the comment string
   (set! buf "")
+  (set! cursor_pos 0)
   (glgui-widget-set! gui:main text 'label buf)
+
   ;; Check if we got data
   (let ((remote-lst (store-listcat "main" "remote")))
     (set! subject-hasdata? (and (list? remote-lst) (not (null? remote-lst))))
   )
+  
   ;; Check if we got everything set
   (if (and subject-num subject-age subject-sex subject-hasdata?)
+    
     (begin
 
       ;; Record the trend variables (trendoutput plugin)
@@ -312,7 +323,11 @@
       (glgui-widget-set! gui:main gui:setup 'hidden #t)
     
     )
+  
   )
+
+  (display "start-callback : end\n")
+
 )
 
 
@@ -385,12 +400,12 @@
         )
         (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
       )
-      ;; Show numeric(s) beside the appropriate trace widget(s)
+      ;; Show each numeric beside the appropriate trace widgets
       (let ([value (string-append (car v) "-value")]
             [color (cadddr v)]
             [lbl (list-ref v 4)]
             [yoffset (list-ref v 6)])
-        (store-set! s value (glgui-valuelabel g (+ x w 175) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
+        (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
       ))
       vars
     )
@@ -478,7 +493,6 @@
 ;;
 ;; Update the trends every delta-time using data from STORE
 (define last_trend_update 0)
-(define show-recording-once #f) ;; not used anywhere?
 
 (define (update-trends store)
   (if (> (- ##now last_trend_update) delta-update)
@@ -612,46 +626,120 @@
 
 ;; Handle events
   (lambda (t x y)
+    
     (update-trends "main")
     (update-values "main")
-    ;; These are button presses
-    (if (= t EVENT_KEYPRESS)
+  
+    (if (and 
+        (= t EVENT_KEYPRESS)
+        (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible (hack "modal" functionality)
+      )
       (begin
-	      (cond
-	        ((= x EVENT_KEYESCAPE) ;; This is ESC
-            (if quit-armed?
-              (terminate)
-              (begin
-                (set! quit-armed? #t)
-                (store-event-add store 1 "Press ESC again to quit!")
-                (glgui-widget-set! gui:main log-list 'list (build-log-list))
+
+        (display "\nKEYPRESS\n")
+
+        (let (
+            [head (if (= (string-length buf) 0) "" (substring buf 0 cursor_pos))]
+            [tail
+              (if (= (string-length buf) 0) 
+                "" 
+                (substring buf cursor_pos (string-length buf))
+              )
+            ]
+          )
+          
+          (display "ENTER:\t|")
+          (display (string-length buf))
+          (display "|")
+          (display cursor_pos)
+          (display "|")
+          (display buf)
+          (display "|")
+          (display head)
+          (display "|")
+          (display tail)
+          (display "|\n")
+
+  	      (cond
+	          ((= x EVENT_KEYESCAPE)
+              (if quit-armed?
+                (terminate)
+                (begin
+                  (set! quit-armed? #t)
+                  (store-event-add store 1 "Press ESC again to quit!")
+                  (glgui-widget-set! gui:main log-list 'list (build-log-list))
+                )
               )
             )
-          )
-	        ((and (>= x 32) (< x 127)) ;; All printable ASCII chars (127 = delete)
-	          (set! buf (string-append buf (string (integer->char x))))
-	        )
-	        ((= x EVENT_KEYBACKSPACE)
-	          (if (> (string-length buf) 0) (set! buf (substring buf 0 (- (string-length buf) 1))))
-	        )
-          ((= x EVENT_KEYTAB) (for-each display (list (store-listcat "main" "remote") "\n")))
-	        ((= x EVENT_KEYENTER)
-	          (begin
-	            (if (> (string-length buf) 0)
-		            ;; If there is data in the string log it
-		            (begin
-                  (store-event-add store 1 buf)
-		              (glgui-widget-set! gui:main log-list 'list (build-log-list))
-		            )
-	            )
-	            (set! buf "")
+	          ((and (>= x 32) (< x 127)) ;; All printable ASCII chars
+              (display "PRINTABLECHAR\n")
+              (set! buf (string-append head (string (integer->char x)) tail))
+              (set! cursor_pos (+ cursor_pos 1))
+  	        )
+	          ((= x EVENT_KEYLEFT)
+              (display "KEYLEFT\n")
+	            (if (> cursor_pos 0)
+                (set! cursor_pos (- cursor_pos 1))
+              )
 	          )
-	        )
-	      )
-        (glgui-widget-set! gui:main text 'label buf)
+	          ((= x EVENT_KEYRIGHT)
+              (display "KEYRIGHT\n")
+	            (if (< cursor_pos (string-length buf))
+                (set! cursor_pos (+ cursor_pos 1))
+              )
+	          )
+            ((= x EVENT_KEYBACKSPACE)
+              (display "KEYBACKSPACE\n")
+	            (if (> cursor_pos 0)
+                (begin
+                  (set! buf (string-append (substring head 0 (- (string-length head) 1)) tail))
+                  (set! cursor_pos (- cursor_pos 1))
+                )
+              )
+	          )
+            ((= x EVENT_KEYDELETE)
+              (display "KEYDELETE\n")
+	            (if (< cursor_pos (string-length buf))
+                (begin
+                  (set! buf (string-append head (substring tail 1 (string-length tail))))
+                )
+              )
+	          )
+            ((= x EVENT_KEYTAB)
+              (display "KEYTAB\n")
+              (for-each display (list (store-listcat "main" "remote") "\n"))
+            )
+	          ((= x EVENT_KEYENTER)
+	            (begin
+                (display "KEYENTER\n")
+	              (if (> (string-length buf) 0)
+		              ;; If there is data in the string log it
+		              (begin
+                    (store-event-add store 1 buf)
+  		              (glgui-widget-set! gui:main log-list 'list (build-log-list))
+	  	            )
+	              )
+	              (set! buf "")
+                (set! cursor_pos 0) 
+	            )
+  	        )
+          )
+
+          (display "EXIT:\t|")
+          (display (string-length buf))
+          (display "|")
+          (display cursor_pos)
+          (display "|")
+          (display buf)
+          (display "|\n")
+
+	        (glgui-widget-set! gui:main text 'label buf)
+        )
       )
+
+      (glgui-event (list gui:main gui:trends) t x y)
+    
     )
-    (glgui-event (list gui:main gui:trends) t x y)
 
     ;; Garbage collect, sleep and iterate over new plugin data
     (##gc)                     ;; This calls the garbage collector
