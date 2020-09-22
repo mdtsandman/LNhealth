@@ -4,8 +4,8 @@
 ;; Mike Traynor 2020
 
 ;; Global variables
-(define buf "")
-(define cursor_pos 0)
+;(define buf "")
+;(define cursor_pos 0)
 
 (define delta-update 10) ;;sec
 (define trend-time 7200) ;;sec
@@ -21,7 +21,7 @@
   (list "Caudal injection start" "Caudal injection end" "Surgery start" "Surgery end")
 )
 (define markers-events
-  (list "Patient movement" (list "Fentanyl bolus" #f) (list "Propofol bolus" #f))
+  (list "Patient movement" (list "Fentanyl bolus:" #f) (list "Propofol bolus:" #f))
 )
 
 ;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
@@ -31,7 +31,7 @@
 (define rupi_port 8080)                       ;; demo
 
 ;; -----------------------------------------------------------------------------
-;;  MAIN GUI
+;;  MAIN SCREEN
 ;; -----------------------------------------------------------------------------
 
 ;; (init-gui-main)
@@ -57,19 +57,11 @@
       (if (< i (length markers-timeline))
         (let ([marker (list-ref markers-timeline i)])
           (if marker
-            (let (
-              [str (if (list? marker) (car marker) marker)]
-              [cb (if (list? marker) marker-freetext-callback marker-callback)]
-              [cl (list? marker)])
-              (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt cb))
-              (glgui-widget-set! gui:main bs 'value -1)
-              (if cl (glgui-widget-set! gui:main bs 'color Pink))
-            )
-            ;; else do nothing
+            (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 marker ascii_16.fnt marker-callback))
+            (glgui-widget-set! gui:main bs 'value -1)
           )
           (loop (+ i 1))
         )
-        ;; else do nothing
       )
     )
   )
@@ -83,21 +75,9 @@
             (let ([cl (list? marker)])
               (let 
                 ([str (if cl (car marker) marker)] [cb (if cl marker-freetext-callback marker-callback)])
-                (set! bs 
-                  (
-                    glgui-button-string
-                    gui:main
-                    x
-                    (- y (* 35 i))
-                    w
-                    30
-                    str
-                    ascii_16.fnt
-                    cb
-                  )
-                )
+                (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt cb))
                 (glgui-widget-set! gui:main bs 'value -1)
-                (if cl (glgui-widget-set! gui:main bs 'color Pink))
+                (if cl (glgui-widget-set! gui:main bs 'color CornflowerBlue))
               )
             )
           )
@@ -115,8 +95,20 @@
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
     
     ;;Text Entry String
-    (set! text (glgui-label gui:main x (- y row_height) w row_height "" ascii_24.fnt Black CornflowerBlue ))
-    
+    (set! text
+      (glgui-inputlabel
+        gui:main 
+        x 
+        (- y row_height)
+        w
+        row_height
+        ""
+        ascii_24.fnt
+        White
+        CornflowerBlue
+      )
+    )
+
     ;;The actual list 
     (set! log-list
       (glgui-list gui:main x (- y (* (+ num_rows 1) row_height)) w (* num_rows row_height) row_height (build-log-list) #f)
@@ -144,16 +136,16 @@
     )
     
   )
-  (glgui-widget-set! g w 'color Black)
 )
 
 (define (marker-freetext-callback g w t x y)
   (let* (
       [idx (glgui-widget-get g w 'value)] 
       [marker (car (glgui-widget-get g w 'image))]
+      [buf (glgui-widget-get gui:main text 'label)]
     )    
     (set! buf (string-append marker " "))
-    (set! cursor_pos (string-length buf))
+    ;(set! cursor_pos (string-length buf))
     (glgui-widget-set! g text 'label buf)
   )
 )
@@ -185,23 +177,24 @@
 )
 
 ;; -----------------------------------------------------------------------------
-;;  SETUP GUI
+;;  SETUP DIALOG
 ;; -----------------------------------------------------------------------------
 (define (init-gui-setup)
   (let ([w 300] [h 270]) ;; dimensions of popup dialog for entry of setup info
     (let ([x (+ 1000 (/ (- 380 w) 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup over the log widget
       (set! gui:setup (glgui-container gui:main x y w h))
-      (glgui-box gui:setup 0 0 w h Navy)
+      (glgui-box gui:setup 0 0 w h CornflowerBlue)
 
       ;; title
       (set! setup_label (glgui-label gui:setup 20 (- h 45) (- w 40) 25 "Study Setup" ascii_24.fnt White))
       (glgui-widget-set! gui:setup setup_label 'align GUI_ALIGNCENTER)
       
       ;; patient
-      (set! id_label (glgui-label gui:setup 20 (- h 55 30) 100 30 "Patient: " ascii_24.fnt White))
+      (set! id_label (glgui-label gui:setup 20 (- h 55 30) 100 30 "Pt #: " ascii_24.fnt White))
       (glgui-widget-set! gui:setup id_label 'align GUI_ALIGNRIGHT)
       (set! setup_id (glgui-inputlabel gui:setup (+ 20 100) (- h 55 (* 30 0) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
       (glgui-widget-set! gui:setup setup_id 'align GUI_ALIGNRIGHT)
+      (glgui-widget-set! gui:setup setup_id 'focus #t)
   
       ;; age
       (set! age_label (glgui-label gui:setup 20 (- h 55 (* 30 2)) 100 30 "Age: " ascii_24.fnt White))
@@ -228,7 +221,7 @@
       ;; start button
       (set! start_btn (glgui-button-string gui:setup (- (/ w 2) (/ 180 2)) 20 180 40 "Start Recording" ascii_24.fnt start-callback))
       (glgui-widget-set! gui:setup start_btn 'align GUI_ALIGNCENTER)
-    
+   
     )
   )
 )
@@ -258,23 +251,21 @@
 ;; Start Recording data
 (define (start-callback g w t x y)
   
-  (display "start-callback : begin\n")
-
   (set! subject-num (string->number (glgui-widget-get gui:setup setup_id 'label)))
   (set! subject-age (string->number (glgui-widget-get gui:setup setup_age 'label)))
   (set! subject-sex (car (list-ref (glgui-widget-get gui:setup setup_sex 'image)
                                    (glgui-widget-get gui:setup setup_sex 'value))))
-  ;; Clear the comment string
-  (set! buf "")
-  (set! cursor_pos 0)
-  (glgui-widget-set! gui:main text 'label buf)
+  ;; Initialize the comment string
+  ;(set! buf "")
+  ;(set! cursor_pos 0)
+  ;(glgui-widget-set! gui:main text 'label buf)
 
-  ;; Check if we got data
+  ;; Check that we have data
   (let ((remote-lst (store-listcat "main" "remote")))
     (set! subject-hasdata? (and (list? remote-lst) (not (null? remote-lst))))
   )
   
-  ;; Check if we got everything set
+  ;; Check that we have everything set
   (if (and subject-num subject-age subject-sex subject-hasdata?)
     
     (begin
@@ -311,7 +302,7 @@
       ;; Start the scheduler
       (scheduler-startcase store
         (string-append "BCCH-" (number->string subject-num) "_" (time->timestamp (current-time))))
-
+      
       ;; Log the demographics
       (store-event-add store 0 (string-append "Patient: BCCH-" (number->string subject-num)))
       (store-event-add store 0 (string-append "Location: " subject-location))
@@ -321,12 +312,13 @@
       
       ;; Hide the input box
       (glgui-widget-set! gui:main gui:setup 'hidden #t)
-    
+   
+      ;; Focus the text-entry label
+      (glgui-widget-set! gui:main text 'focus #t)
+
     )
   
   )
-
-  (display "start-callback : end\n")
 
 )
 
@@ -630,118 +622,48 @@
     (update-trends "main")
     (update-values "main")
   
-    (if (and 
+    (if 
+      (and 
         (= t EVENT_KEYPRESS)
         (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible (hack "modal" functionality)
       )
       (begin
-
-        (display "\nKEYPRESS\n")
-
-        (let (
-            [head (if (= (string-length buf) 0) "" (substring buf 0 cursor_pos))]
-            [tail
-              (if (= (string-length buf) 0) 
-                "" 
-                (substring buf cursor_pos (string-length buf))
-              )
-            ]
+        (if (= x EVENT_KEYESCAPE)
+          (if quit-armed?
+            (terminate)
+            (begin
+              (set! quit-armed? #t)
+              (store-event-add store 1 "Press ESC again to quit!")
+  		        (glgui-widget-set! gui:main log-list 'list (build-log-list))
+            )
           )
-          
-          (display "ENTER:\t|")
-          (display (string-length buf))
-          (display "|")
-          (display cursor_pos)
-          (display "|")
-          (display buf)
-          (display "|")
-          (display head)
-          (display "|")
-          (display tail)
-          (display "|\n")
-
-  	      (cond
-	          ((= x EVENT_KEYESCAPE)
-              (if quit-armed?
-                (terminate)
-                (begin
-                  (set! quit-armed? #t)
-                  (store-event-add store 1 "Press ESC again to quit!")
-                  (glgui-widget-set! gui:main log-list 'list (build-log-list))
-                )
-              )
+          (if quit-armed?
+            (begin
+              (set! quit-armed? #f) ;; Any other key disarms quit, if set.
+              (store-event-add store 1 "Quit sequence aborted")
+  		        (glgui-widget-set! gui:main log-list 'list (build-log-list))
             )
-	          ((and (>= x 32) (< x 127)) ;; All printable ASCII chars
-              (display "PRINTABLECHAR\n")
-              (set! buf (string-append head (string (integer->char x)) tail))
-              (set! cursor_pos (+ cursor_pos 1))
-  	        )
-	          ((= x EVENT_KEYLEFT)
-              (display "KEYLEFT\n")
-	            (if (> cursor_pos 0)
-                (set! cursor_pos (- cursor_pos 1))
-              )
-	          )
-	          ((= x EVENT_KEYRIGHT)
-              (display "KEYRIGHT\n")
-	            (if (< cursor_pos (string-length buf))
-                (set! cursor_pos (+ cursor_pos 1))
-              )
-	          )
-            ((= x EVENT_KEYBACKSPACE)
-              (display "KEYBACKSPACE\n")
-	            (if (> cursor_pos 0)
-                (begin
-                  (set! buf (string-append (substring head 0 (- (string-length head) 1)) tail))
-                  (set! cursor_pos (- cursor_pos 1))
-                )
-              )
-	          )
-            ((= x EVENT_KEYDELETE)
-              (display "KEYDELETE\n")
-	            (if (< cursor_pos (string-length buf))
-                (begin
-                  (set! buf (string-append head (substring tail 1 (string-length tail))))
-                )
-              )
-	          )
-            ((= x EVENT_KEYTAB)
-              (display "KEYTAB\n")
-              (for-each display (list (store-listcat "main" "remote") "\n"))
-            )
-	          ((= x EVENT_KEYENTER)
-	            (begin
-                (display "KEYENTER\n")
-	              (if (> (string-length buf) 0)
-		              ;; If there is data in the string log it
-		              (begin
-                    (store-event-add store 1 buf)
-  		              (glgui-widget-set! gui:main log-list 'list (build-log-list))
-	  	            )
-	              )
-	              (set! buf "")
-                (set! cursor_pos 0) 
+          )
+        )
+	      (if (= x EVENT_KEYENTER)
+	        (begin
+            (let ([buf (glgui-widget-get gui:main text 'label)])
+	            (if (> (string-length buf) 0)
+		            ;; If there is data in the string log it
+		            (begin
+                  (store-event-add store 1 buf)
+  		            (glgui-widget-set! gui:main log-list 'list (build-log-list))
+                  (glgui-widget-set! gui:main text 'label "")
+	  	          )
 	            )
-  	        )
+	          )
           )
-
-          (display "EXIT:\t|")
-          (display (string-length buf))
-          (display "|")
-          (display cursor_pos)
-          (display "|")
-          (display buf)
-          (display "|\n")
-
-	        (glgui-widget-set! gui:main text 'label buf)
         )
       )
-
       (glgui-event (list gui:main gui:trends) t x y)
-    
     )
 
-    ;; Garbage collect, sleep and iterate over new plugin data
+;; Garbage collect, sleep and iterate over new plugin data
     (##gc)                     ;; This calls the garbage collector
     (thread-sleep! 0.005)      ;; Sleep for 5 microseconds
     (scheduler-iterate)
