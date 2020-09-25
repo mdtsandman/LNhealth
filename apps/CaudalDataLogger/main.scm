@@ -7,20 +7,29 @@
 ;(define buf "")
 ;(define cursor_pos 0)
 
-(define delta-update 10) ;;sec
-(define trend-time 7200) ;;sec
-(define trend-len (fix (/ trend-time delta-update))) ;;sec
-(define gui:numtimes 5) ;; Number of time lines
-(define screenshot-time #f)
-(define quit-armed? #f)
+(define screen_width 1600)
+(define screen_height 850)
+
+(define trend_update_interval 10) ;;sec
+(define trend_duration 7200) ;;sec
+(define trend_len (fix (/ trend_duration trend_update_interval))) ;;sec
+(define num_trend_ticks 5)
+
+(define wave_update_interval 0.01) ;;sec
+(define wave_duration 15.2) ;;sec
+(define wave_len (fix (/ wave_duration wave_update_interval))) ;;sec
+(define num_wave_ticks 5)
+
+(define screenshot_time #f)
+(define quit_armed? #f)
 
 (define or-list (list))      ;; list of all monitoring locations
 (define subject-location #f) ;; monitoring location for current subject
 
-(define markers-timeline 
+(define markers_timeline 
   (list "Caudal injection start" "Caudal injection end" "Surgery start" "Surgery end")
 )
-(define markers-events
+(define markers_events
   (list "Patient movement" (list "Fentanyl bolus:" #f) (list "Propofol bolus:" #f))
 )
 
@@ -42,8 +51,6 @@
 (define (init-gui-main)
   ;; Instantiate the gui
   (set! gui:main (make-glgui))
-  ;; Stamp with copyright image
-  (glgui-pixmap gui:main 675 2 copyright.img)
   ;; Menubar
   (glgui-menubar gui:main 0 (- (glgui-height-get) 50) (glgui-width-get) 50)
   ;; Label in upper left corner
@@ -54,8 +61,8 @@
   ;; Timeline buttons
   (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 85) ])
     (let loop ([i 0])
-      (if (< i (length markers-timeline))
-        (let ([marker (list-ref markers-timeline i)])
+      (if (< i (length markers_timeline))
+        (let ([marker (list-ref markers_timeline i)])
           (if marker
             (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 marker ascii_16.fnt marker-callback))
             (glgui-widget-set! gui:main bs 'value -1)
@@ -67,10 +74,10 @@
   )
 
   ;; Event buttons
-  (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 100 (* 35 6)) ])
+  (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 100 (* 35 4)) ])
     (let loop ([i 0])
-      (if (< i (length markers-events))
-        (let ([marker (list-ref markers-events i)])
+      (if (< i (length markers_events))
+        (let ([marker (list-ref markers_events i)])
           (if marker
             (let ([cl (list? marker)])
               (let 
@@ -89,31 +96,13 @@
 
   ;; Logging List
   (let ( [x 1000] [y (- (glgui-height-get) 50 )] [w 380] [num_rows 18] [row_height 30] )
-    
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
-    
     ;;Text Entry String
-    (set! text
-      (glgui-inputlabel
-        gui:main 
-        x 
-        (- y row_height)
-        w
-        row_height
-        ""
-        ascii_24.fnt
-        White
-        CornflowerBlue
-      )
-    )
-
+    (set! text (glgui-inputlabel gui:main x (- y row_height) w row_height "" ascii_24.fnt White CornflowerBlue))
     ;;The actual list 
-    (set! log-list
-      (glgui-list gui:main x (- y (* (+ num_rows 1) row_height)) w (* num_rows row_height) row_height (build-log-list) #f)
-    )
-  
+    (set! log-list (glgui-list gui:main x (- y (* (+ num_rows 1) row_height)) w (* num_rows row_height) row_height (build-log-list) #f))
   ) 
 
 ) ;; end of init-gui-main definition
@@ -131,7 +120,7 @@
     (glgui-widget-set! gui:main log-list 'list (build-log-list))
     
     ;; Arm screenshot
-    (if (string=? marker (car (reverse markers-timeline)))
+    (if (string=? marker (car (reverse markers_timeline)))
       (set! screenshot-time (fl+ ##now 30.))
     )
     
@@ -145,7 +134,6 @@
       [buf (glgui-widget-get gui:main text 'label)]
     )    
     (set! buf (string-append marker " "))
-    ;(set! cursor_pos (string-length buf))
     (glgui-widget-set! g text 'label buf)
   )
 )
@@ -322,9 +310,8 @@
 
 )
 
-
 ;; -----------------------------------------------------------------------------
-;;  TREND GUI
+;;  CONTAINER WIDGET FOR TRENDS
 ;; -----------------------------------------------------------------------------
 (define gui:trends #f)
 ;; vmin & vmax: define the scale for each waveform
@@ -335,30 +322,26 @@
 (define trends 
   (list
 ;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
-    (list "hr"        90    200   Green       label_hr.img        "HR"        1        90       1)
-    (list "pulse"     90    200   DarkGreen   label_pulse.img     "PRSpO2"    1.3      90       1)
-    (list "map_nibp"  25    100   IndianRed   label_map_nibp.img  "NBPmean"   2        90       2)
-    (list "spo2"      50    100   Aquamarine  label_spo2.img      "SpO2"      3        90       3)
-    (list "rso2_1"    50    100   Blue        label_rso2_1.img    "rSO2-1"    4        90       4)
-    (list "rso2_2"    50    100   LightBlue   label_rso2_2.img    "rSO2-2"    4.3      90       4)
-    (list "icp"        0    100   Yellow      label_icp.img       "ICP"       5        90       5)
-    (list "fio2"       0    100   Blue        label_fio2.img      "FiO2"      6        90       6)
-    (list "pco2_et"    0    100   Orange      label_pco2_et.img   "ETCO2"     6.3      90       6)
-    (list "rr"         0     60   DimGray     label_rr.img        "RR"        7        90       7)
-    (list "pip"        0     35   White       label_pip.img       "PIP"       8        90       8)
-    (list "peep"       0     35   White       label_peep.img      "PEEP"      8.3      90       8)
+    (list "hr"        75    225   Green       label_hr.img        "HR"        1        90       1)
+    (list "map_nibp"   0    100   IndianRed   label_map_nibp.img  "NBPmean"   1.3      90       1)
+    (list "fio2"       0    100   Blue        label_fio2.img      "FiO2"      2        90       2)
+    (list "spo2"       0    100   Aquamarine  label_spo2.img      "SpO2"      2.3      90       2)
+    (list "pco2_et"    0    100   Orange      label_pco2_et.img   "ETCO2"     3        90       3)
+    (list "rr"         0     60   DimGray     label_rr.img        "RR"        4        90       4)
+    (list "pip"        0     40   White       label_pip.img       "PIP"       5        90       5)
+    (list "peep"       0     40   White       label_peep.img      "PEEP"      5.3      90       5)
+    (list "rso2"      50    100   Blue        label_rso2.img      "rSO2-1"    6        90       6)
   )
 )
 
 ;; Plotting functions
-
 ;; g:     container widget
 ;; x:     LLC x-coord (pixels)
 ;; y0:    LLC y-coord (pixels)?
 ;; s:     store
 ;; vars:  list of all vars to be trended (name, vmin, vmax, color, label.img, storename, yoffset, trace-h, traceoffset)
 (define (make-trends g x y0 s vars)
-  (let* ([w trend-len] [h 100] [y (- y0 h)] [ws trend-len] [min_y 0])
+  (let* ([w trend_len] [h 100] [y (- y0 h)] [ws trend_len] [min_y 0])
     ;; Draw a horizontal line above the top trace widget
     (glgui-box g (+ x 20) (- (glgui-height-get) 50) (+ w 40) 1 DimGray)
     (for-each (lambda (v)
@@ -408,23 +391,15 @@
 (define (init-gui-trends)
   
   (set! gui:trends (make-glgui))
-  
+
   ;; Create trend numbers and waveforms
-  (set! gui:trends-h
-    (make-trends 
-      gui:trends 
-      0 
-      (- (glgui-height-get) 50) 
-      store 
-      trends
-    )
-  )
+  (set! gui:trends-h (make-trends gui:trends 0 (- (glgui-height-get) 50) store trends))
 
   ;; Marker trace
-  (let 
-    ( [trace 
+  (let
+    ( [trace
         (make-gltrace    ;; This is the trace itself
-          trend-len     ;; Width
+          trend_len     ;; Width
           100           ;; Height
           GLTRACE_SHIFT ;; Mode (SHIFT, OVERWRITE, RESET)
           0             ;; Lowest plotted value
@@ -450,7 +425,7 @@
         gui:trends                             ;; Parent widget                                         
         20                                     ;; LLC x-axis (pixels)
         gui:trends-h                           ;; LLC y-axis (pixels)
-        (+ trend-len 40)                       ;; Width (pixels)
+        (+ trend_len 40)                       ;; Width (pixels)
         (- (glgui-height-get) 50 gui:trends-h) ;; Height (pixels)
         trace                                  ;; Data to be traced
         Yellow                                 ;; Color
@@ -461,10 +436,10 @@
 
   ;; Add a grid with time markers at bottom
   (let* (
-      [y (- (glgui-height-get) 50 (* 90 8))]
-      [h (* 90 8)]
-      [w (+ trend-len 40)]
-      [num (fx- gui:numtimes 1)]
+      [y (- (glgui-height-get) 50 (* 90 6))]
+      [h (* 90 6)]
+      [w (+ trend_len 40)]
+      [num (fx- num_trend_ticks 1)]
       [bw 1]
     )
     (let loop ([x 20] [i 0])
@@ -487,9 +462,8 @@
 (define last_trend_update 0)
 
 (define (update-trends store)
-  (if (> (- ##now last_trend_update) delta-update)
+  (if (> (- ##now last_trend_update) trend_update_interval)
     (begin
-      
       ;; Update the trend traces, including marker lines
       (for-each (lambda (trend)
                   (let* (
@@ -504,24 +478,12 @@
                 )
         (append trends (list (list "EventMarker" #f #f #f #f "EventMarker")))
       )
-      
       ;; Reset last update time
       (set! last_trend_update ##now)
-
       ;; Mark a new logging entry, if one is found
       (let ((em (store-ref store "EventMarker")))
         (if em (store-set! store "EventMarker" (if (fl> em 0.) 0. #f)))
       )
-      
-      ;; Save a screenshot
-      (if (and screenshot-time (fl> ##now screenshot-time))
-        (begin
-          (set! screenshot-time #f)
-          (screenshot->png (string-append (instance-refvar store "TRENDOUT" "CasePath" "")
-          (system-pathseparator) (seconds->string ##now "%Y%m%d_%H%M%S") ".png"))
-        )
-      )
-      
     )
   )
 )
@@ -532,7 +494,6 @@
 (define (update-values store)
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
     (begin
-      
       ;; Update the trend numerics
       (for-each 
         (lambda (trend)
@@ -547,31 +508,165 @@
         )
         trends
       )
-      
       ;; Update times everywhere
       (store-set! "main" "time_str" (seconds->string ##now "%H%M%S"))
       (glgui-widget-set! gui:main clock 'label (seconds->string ##now "%T"))
-      
       ;; Update the other clocks too
-      (let loop ((i 0) (t (- ##now trend-time)))
-        (if (fx= i gui:numtimes) #f
+      (let loop ((i 0) (t (- ##now trend_duration)))
+        (if (fx= i num_trend_ticks) #f
           (let ([wgt (store-ref store (string-append "time-" (number->string i)))])
             (glgui-widget-set! gui:main wgt 'label (seconds->string t "%H:%M"))
-            (loop (fx+ i 1) (fl+ t (flo (/ trend-time (fx- gui:numtimes 1)))))
+            (loop (fx+ i 1) (fl+ t (flo (/ trend_duration (fx- num_trend_ticks 1)))))
           )
         )
       )
-      
     )
   )
 )
+
+
+
+;; -----------------------------------------------------------------------------
+;;  CONTAINER WIDGET FOR WAVES
+;; -----------------------------------------------------------------------------
+(define gui:waves #f)
+;; vmin & vmax: define the scale for each waveform
+;; label.img:   must correspond to an item in the file STRINGS
+;; yoffset:     vertical offset of the numeric where 1.0 represents the width of one trend band?
+;; traceh:      width of the trend band, in pixels?
+;; traceoffset: ordinal vertical offset of the trace band to use for the waveform?
+(define waves
+  (list
+;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
+    (list "ICP"        0    100   Yellow      label_icp.img       "ICP"       1        200       1)
+  )
+)
+
+(define (make-waves g x y0 s vars)
+  (display "make-waves: starting\n")
+  (let* ([w wave_len] [h 100] [y (- y0 h)] [ws wave_len] [min_y 0])
+    ;; Draw a horizontal line above the top trace widget
+    (glgui-box g (+ x 20) (- (glgui-height-get) 650) (+ w 40) 1 DimGray)
+    (for-each (lambda (v)
+      ;; Make trend plot
+      (let* ([name (car v)]                         ;; first element of main list
+             [vmin (cadr v)]                        ;; = (car (cdr v)) = second element of main list
+             [vmax (caddr v)]                       ;; = (car (cdr (cdr v) ) ) = third element ...
+             [color (cadddr v)]                     ;; = (car (cdr (cdr (cdr v) ) ) ) = fourth element ...
+             [trace-h (list-ref v 7)]               ;; seventh element of main list
+             [traceoffset (list-ref v 8)]           ;; eighth element of main list
+             [trace (string-append name "-trace")]
+             [wave (string-append name "-wave")])
+        ;; Define trace to plot waveform
+        (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
+          (store-set! s trace trc)
+          ;; Clear the trace
+          (gltrace:clear trc)
+          ;; Draw a horizontal line below the trace widget
+          (glgui-box g (+ x 20) (- (glgui-height-get) 650 (* 150 traceoffset)) (+ w 40) 1 DimGray)
+          ;; Place the trace widget
+          (store-set! s wave (
+            glgui-trace-slider                       
+              g                                     ;; GUI container widget 
+              (+ x 20)                              ;; LLC x-coord (pixels)
+              (- (glgui-height-get) 650 (* 150 traceoffset)) ;; LLC y-coord (pixels)
+              (+ w 40)                              ;; width (pixels)
+              150                                   ;; height (pixels)
+              trc                                   ;; data
+              color                               
+              ascii_16.fnt))
+        )
+        (set! min_y (- (glgui-height-get) 50 (* 150 traceoffset)))
+      )
+      ;; Show each numeric beside the appropriate trace widgets
+      (let ([value (string-append (car v) "-value")]
+            [color (cadddr v)]
+            [lbl (list-ref v 4)]
+            [yoffset (list-ref v 6)])
+        (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) (* 150 yoffset)) lbl num_40.fnt color))
+      ))
+      vars
+    )
+    min_y
+  )
+  (display "make-waves: exiting\n")
+)
+
+(define (init-gui-waves)
+
+  (display "init-gui-waves: begin\n")
+
+  (set! gui:waves (make-glgui))
+  
+  ;; Create waveforms and numerics
+  (display "init-gui-waves: creating waveforms and numerics\n")
+  (set! gui:waves-h (make-waves gui:waves 0 (- (glgui-height-get) 650) store waves))
+ 
+  ;; Add a grid with time markers at bottom
+  (display "init-gui-waves: adding grid\n")
+  (let* (
+      [y (- (glgui-height-get) 650 (* 150 1))]
+      [h (* 150 1)]
+      [w (+ wave_len 40)]
+      [num (fx- num_wave_ticks 1)]
+      [bw 1]
+    )
+    (let loop ([x 20] [i 0])
+      (display "init-gui-waves: loop iteration\n")
+      (if (fx> i num) #f
+        (begin
+          (glgui-box gui:waves x y bw h DimGray)
+          (store-set! store (string-append "time-" (number->string i))
+            (glgui-label gui:waves (if (fx< x 17) 0 (fx- x 17)) (fx- y 20) 60 16 "" ascii_16.fnt DimGray))
+          (loop (fx+ x (fix (/ w num))) (fx+ i 1))
+        )
+      )
+    )
+  )
+
+  (display "init-gui-waves: begin\n")
+
+)
+
+;; (update-waves store)
+;;
+;; Update the waves every interval using data from STORE
+(define last_wave_update 0)
+
+(define (update-waves store)
+  (if (> (- ##now last_wave_update) wave_update_interval)
+    (begin
+      
+      ;; Update the wave traces
+      (for-each (lambda (wave)
+                  (let* (
+                      [name (car wave)]
+                      [storename (list-ref wave 5)]
+                      [val (store-timedref store storename #f)]
+                      [trace (store-ref store (string-append name "-trace"))]
+                    )
+                    (gltrace-add trace val)
+                    (gltrace-update trace)
+                  )
+                )
+                (append trends (list (list "EventMarker" #f #f #f #f "EventMarker")))
+      )
+
+      ;; Reset last update time
+      (set! last_wave_update ##now)
+
+    )
+  )
+)
+
+
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN PROGRAM
 ;; -----------------------------------------------------------------------------
 (main
   
-;; Initialize
+  ;; Initialize
   (lambda (w h)
     
     (if 
@@ -603,85 +698,82 @@
       (if (pair? rooms) (set! or-list (sort (map car rooms) string<?)))
     )
 
-    ;; Initialize the monitor connection
+    ;; Initialize the store (connection to monitor)
     (set! store (make-store "main"))
     
     ;; Initialize the gui
     (init-gui-main)
     (init-gui-setup)
     (init-gui-trends)
+    (init-gui-waves)
 
-    ;;Make sure that the scheduler actually runs !!!
+    ;; Start the scheduler
     (scheduler-init)
   
   )
 
-;; Handle events
+  ;; Handle events
   (lambda (t x y)
-    
     (update-trends "main")
+    (update-waves "main")
     (update-values "main")
-  
-    (if 
-      (and 
-        (= t EVENT_KEYPRESS)
-        (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible (hack "modal" functionality)
-      )
-      (begin
-        (if (= x EVENT_KEYESCAPE)
-          (if quit-armed?
-            (terminate)
+    (if (= t EVENT_KEYPRESS)
+      (if (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
+        (cond 
+          [(and (= x EVENT_KEYESCAPE) quit-armed?)
+            (terminate) ;; ESC (x2 consecutive) terminates program
+          ]
+          [(= x EVENT_KEYESCAPE)
             (begin
-              (set! quit-armed? #t)
+              (set! quit-armed? #t) ;; ESC (x1) arms quit
               (store-event-add store 1 "Press ESC again to quit!")
-  		        (glgui-widget-set! gui:main log-list 'list (build-log-list))
+    		      (glgui-widget-set! gui:main log-list 'list (build-log-list))
             )
-          )
-          (if quit-armed?
+          ]
+          [quit-armed?
             (begin
-              (set! quit-armed? #f) ;; Any other key disarms quit, if set.
+              (set! quit-armed? #f) ;; Any key other than ESC disarms quit.
               (store-event-add store 1 "Quit sequence aborted")
   		        (glgui-widget-set! gui:main log-list 'list (build-log-list))
             )
-          )
-        )
-	      (if (= x EVENT_KEYENTER)
-	        (begin
-            (let ([buf (glgui-widget-get gui:main text 'label)])
-	            (if (> (string-length buf) 0)
-		            ;; If there is data in the string log it
-		            (begin
-                  (store-event-add store 1 buf)
-  		            (glgui-widget-set! gui:main log-list 'list (build-log-list))
-                  (glgui-widget-set! gui:main text 'label "")
-	  	          )
+          ]
+          [(= x EVENT_KEYENTER)
+	          (begin
+              (let ([buf (glgui-widget-get gui:main text 'label)])
+	              (if (> (string-length buf) 0)
+		              ;; If there is data in the string, log it
+		              (begin
+                    (store-event-add store 1 buf)
+  		              (glgui-widget-set! gui:main log-list 'list (build-log-list))
+                    (glgui-widget-set! gui:main text 'label "")
+  	  	          )
+	              )
 	            )
-	          )
-          )
+            )
+          ]
         )
       )
-      (glgui-event (list gui:main gui:trends) t x y)
+      (glgui-event (list gui:main gui:trends gui:waves) t x y)
     )
-
-;; Garbage collect, sleep and iterate over new plugin data
+    ;; Garbage collect, sleep and iterate over new plugin data
     (##gc)                     ;; This calls the garbage collector
     (thread-sleep! 0.005)      ;; Sleep for 5 microseconds
     (scheduler-iterate)
-  
   )
 
-;; Terminate
+  ;; Terminate
   (lambda ()
     (scheduler-endcase "main")
     (scheduler-cleanup)
     #t
   )
 
-;; Suspend
+  ;; Suspend
   (lambda () (glgui-suspend))
 
-;; Resume
+  ;; Resume
   (lambda () (glgui-resume))
+
 )
 
 ;; eof
