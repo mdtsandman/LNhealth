@@ -4,9 +4,6 @@
 ;; Mike Traynor 2020
 
 ;; Global variables
-;(define buf "")
-;(define cursor_pos 0)
-
 (define screen_width 1600)
 (define screen_height 850)
 
@@ -18,7 +15,7 @@
 (define wave_update_interval 0.01) ;;sec
 (define wave_duration 15.2) ;;sec
 (define wave_len (fix (/ wave_duration wave_update_interval))) ;;sec
-(define num_wave_ticks 5)
+(define num_wave_ticks 10)
 
 (define screenshot_time #f)
 (define quit_armed? #f)
@@ -33,11 +30,15 @@
   (list "Patient movement" (list "Fentanyl bolus:" #f) (list "Propofol bolus:" #f))
 )
 
+
+
 ;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
 ;(define rupi_port 8031)                       ;; prod
 
 (define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
 (define rupi_port 8080)                       ;; demo
+
+
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN SCREEN
@@ -323,13 +324,13 @@
   (list
 ;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
     (list "hr"        75    225   Green       label_hr.img        "HR"        1        90       1)
-    (list "map_nibp"   0    100   IndianRed   label_map_nibp.img  "NBPmean"   1.3      90       1)
+    (list "map_nibp"   0    100   IndianRed   label_map_nibp.img  "NBPmean"   1.4      90       1)
     (list "fio2"       0    100   Blue        label_fio2.img      "FiO2"      2        90       2)
-    (list "spo2"       0    100   Aquamarine  label_spo2.img      "SpO2"      2.3      90       2)
+    (list "spo2"       0    100   Aquamarine  label_spo2.img      "SpO2"      2.4      90       2)
     (list "pco2_et"    0    100   Orange      label_pco2_et.img   "ETCO2"     3        90       3)
     (list "rr"         0     60   DimGray     label_rr.img        "RR"        4        90       4)
     (list "pip"        0     40   White       label_pip.img       "PIP"       5        90       5)
-    (list "peep"       0     40   White       label_peep.img      "PEEP"      5.3      90       5)
+    (list "peep"       0     40   White       label_peep.img      "PEEP"      5.4      90       5)
     (list "rso2"      50    100   Blue        label_rso2.img      "rSO2-1"    6        90       6)
   )
 )
@@ -446,7 +447,7 @@
       (if (fx> i num) #f
         (begin
           (glgui-box gui:trends x y bw h DimGray)
-          (store-set! store (string-append "time-" (number->string i))
+          (store-set! store (string-append "time-trends-" (number->string i))
             (glgui-label gui:trends (if (fx< x 17) 0 (fx- x 17)) (fx- y 20) 60 16 "" ascii_16.fnt White))
           (loop (fx+ x (fix (/ w num))) (fx+ i 1))
         )
@@ -458,7 +459,7 @@
 
 ;; (update-trends store)
 ;;
-;; Update the trends every delta-time using data from STORE
+;; Update the trends every interval using data from STORE
 (define last_trend_update 0)
 
 (define (update-trends store)
@@ -494,7 +495,7 @@
 (define (update-values store)
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
     (begin
-      ;; Update the trend numerics
+      ;; Update numerics (trends)
       (for-each 
         (lambda (trend)
           (let* (
@@ -508,23 +509,45 @@
         )
         trends
       )
-      ;; Update times everywhere
-      (store-set! "main" "time_str" (seconds->string ##now "%H%M%S"))
-      (glgui-widget-set! gui:main clock 'label (seconds->string ##now "%T"))
-      ;; Update the other clocks too
+      ;; Update numerics (waves)
+      (for-each 
+        (lambda (wave)
+          (let* (
+              [name (car wave)]
+              [storename (list-ref wave 5)]
+              [val (store-timedref store storename #f)]
+              [label (store-ref store (string-append name "-value"))]
+            )
+            (glgui-widget-set! gui:waves label 'label (if val (number->string (fix val)) ""))
+          )
+        )
+        waves
+      )
+     ;; Update ticks (trends)
+      (display "Updating ticks (trends)\n")
       (let loop ((i 0) (t (- ##now trend_duration)))
         (if (fx= i num_trend_ticks) #f
-          (let ([wgt (store-ref store (string-append "time-" (number->string i)))])
+          (let ([wgt (store-ref store (string-append "time-trends-" (number->string i)))])
             (glgui-widget-set! gui:main wgt 'label (seconds->string t "%H:%M"))
             (loop (fx+ i 1) (fl+ t (flo (/ trend_duration (fx- num_trend_ticks 1)))))
           )
         )
       )
+      ;; Update ticks (waves)
+      (display "Updating ticks (waves)\n")
+      (let loop ((i 0) (t (- ##now wave_duration)))
+        (if (fx= i num_wave_ticks) #f
+          (let ([wgt (store-ref store (string-append "time-waves-" (number->string i)))])
+            (glgui-widget-set! gui:main wgt 'label (seconds->string t "%H:%M:%S"))
+            (loop (fx+ i 1) (fl+ t (flo (/ wave_duration (fx- num_wave_ticks 1)))))
+          )
+        )
+      )
+      ;; Update clock
+      (glgui-widget-set! gui:main clock 'label (seconds->string ##now "%T"))
     )
   )
 )
-
-
 
 ;; -----------------------------------------------------------------------------
 ;;  CONTAINER WIDGET FOR WAVES
@@ -543,7 +566,6 @@
 )
 
 (define (make-waves g x y0 s vars)
-  (display "make-waves: starting\n")
   (let* ([w wave_len] [h 100] [y (- y0 h)] [ws wave_len] [min_y 0])
     ;; Draw a horizontal line above the top trace widget
     (glgui-box g (+ x 20) (- (glgui-height-get) 650) (+ w 40) 1 DimGray)
@@ -589,21 +611,13 @@
     )
     min_y
   )
-  (display "make-waves: exiting\n")
 )
 
 (define (init-gui-waves)
-
-  (display "init-gui-waves: begin\n")
-
   (set! gui:waves (make-glgui))
-  
   ;; Create waveforms and numerics
-  (display "init-gui-waves: creating waveforms and numerics\n")
   (set! gui:waves-h (make-waves gui:waves 0 (- (glgui-height-get) 650) store waves))
- 
   ;; Add a grid with time markers at bottom
-  (display "init-gui-waves: adding grid\n")
   (let* (
       [y (- (glgui-height-get) 650 (* 150 1))]
       [h (* 150 1)]
@@ -612,20 +626,28 @@
       [bw 1]
     )
     (let loop ([x 20] [i 0])
-      (display "init-gui-waves: loop iteration\n")
       (if (fx> i num) #f
         (begin
           (glgui-box gui:waves x y bw h DimGray)
-          (store-set! store (string-append "time-" (number->string i))
-            (glgui-label gui:waves (if (fx< x 17) 0 (fx- x 17)) (fx- y 20) 60 16 "" ascii_16.fnt DimGray))
+          (store-set!
+            store 
+            (string-append "time-waves-" (number->string i))
+            (glgui-label 
+              gui:waves 
+              (if (fx< x 17) 0 (fx- x 17))  ;; LLC x
+              (fx- y 20)                    ;; LLC y
+              60                            ;; width
+              16                            ;; height
+              ""                            ;; text
+              ascii_16.fnt
+              Yellow
+            )
+          )
           (loop (fx+ x (fix (/ w num))) (fx+ i 1))
         )
       )
     )
   )
-
-  (display "init-gui-waves: begin\n")
-
 )
 
 ;; (update-waves store)
@@ -658,8 +680,6 @@
     )
   )
 )
-
-
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN PROGRAM
@@ -714,8 +734,9 @@
 
   ;; Handle events
   (lambda (t x y)
+    (store-set! "main" "time_str" (seconds->string ##now "%H%M%S"))
     (update-trends "main")
-    (update-waves "main")
+    (update-waves  "main")
     (update-values "main")
     (if (= t EVENT_KEYPRESS)
       (if (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
@@ -753,7 +774,16 @@
           ]
         )
       )
-      (glgui-event (list gui:main gui:trends gui:waves) t x y)
+      (glgui-event 
+        (list 
+          gui:main
+          gui:trends
+          gui:waves
+        ) 
+        t 
+        x 
+        y
+      )
     )
     ;; Garbage collect, sleep and iterate over new plugin data
     (##gc)                     ;; This calls the garbage collector
