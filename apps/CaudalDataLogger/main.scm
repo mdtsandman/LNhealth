@@ -4,6 +4,13 @@
 ;; Mike Traynor 2020
 
 ;; Global variables
+
+;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
+;(define rupi_port 8031)                       ;; prod
+
+(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
+(define rupi_port 8080)                       ;; demo
+
 (define screen_width 1600)
 (define screen_height 850)
 
@@ -12,8 +19,8 @@
 (define trend_len (fix (/ trend_duration trend_update_interval))) ;;sec
 (define num_trend_ticks 5)
 
-(define wave_update_interval 0.01) ;;sec
-(define wave_duration 15.2) ;;sec
+(define wave_update_interval 0.1) ;;sec
+(define wave_duration 140) ;;sec
 (define wave_len (fix (/ wave_duration wave_update_interval))) ;;sec
 (define num_wave_ticks 10)
 
@@ -30,13 +37,6 @@
   (list "Patient movement" (list "Fentanyl bolus:" #f) (list "Propofol bolus:" #f))
 )
 
-
-
-;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
-;(define rupi_port 8031)                       ;; prod
-
-(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
-(define rupi_port 8080)                       ;; demo
 
 
 
@@ -244,10 +244,6 @@
   (set! subject-age (string->number (glgui-widget-get gui:setup setup_age 'label)))
   (set! subject-sex (car (list-ref (glgui-widget-get gui:setup setup_sex 'image)
                                    (glgui-widget-get gui:setup setup_sex 'value))))
-  ;; Initialize the comment string
-  ;(set! buf "")
-  ;(set! cursor_pos 0)
-  ;(glgui-widget-set! gui:main text 'label buf)
 
   ;; Check that we have data
   (let ((remote-lst (store-listcat "main" "remote")))
@@ -275,16 +271,18 @@
         )
       )
       
-      ;; Record some waveforms
+      ;; Record the waveforms
       (let ((waves (append ivue:waveform_basic ivue:waveforms_aisys)))
-        (for-each (lambda (l) 
-          (make-instance
+        (for-each 
+          (lambda (l) 
+            (make-instance
               "main"
               (string-append "WAVEOUT" l)
               "waveoutput" 
               `("Source" ,l)
             )
-          ) waves
+          ) 
+          waves
         )
       )
 
@@ -345,44 +343,46 @@
   (let* ([w trend_len] [h 100] [y (- y0 h)] [ws trend_len] [min_y 0])
     ;; Draw a horizontal line above the top trace widget
     (glgui-box g (+ x 20) (- (glgui-height-get) 50) (+ w 40) 1 DimGray)
-    (for-each (lambda (v)
-      ;; Make trend plot
-      (let* ([name (car v)]                         ;; first element of main list
-             [vmin (cadr v)]                        ;; = (car (cdr v)) = second element of main list
-             [vmax (caddr v)]                       ;; = (car (cdr (cdr v) ) ) = third element ...
-             [color (cadddr v)]                     ;; = (car (cdr (cdr (cdr v) ) ) ) = fourth element ...
-             [trace-h (list-ref v 7)]               ;; seventh element of main list
-             [traceoffset (list-ref v 8)]           ;; eighth element of main list
-             [trace (string-append name "-trace")]
-             [wave (string-append name "-wave")])
-        ;; Define trace to plot waveform
-        (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
-          (store-set! s trace trc)
-          ;; Clear the trace
-          (gltrace:clear trc)
-          ;; Draw a horizontal line below the trace widget
-          (glgui-box g (+ x 20) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 1 DimGray)
-          ;; Place the trace widget
-          (store-set! s wave (
-            glgui-trace-slider                       
-              g                                     ;; GUI container widget 
-              (+ x 20)                              ;; LLC x-coord (pixels)
-              (- (glgui-height-get) 50 (* 90 traceoffset)) ;; LLC y-coord (pixels)
-              (+ w 40)                              ;; width (pixels)
-              90                                    ;; height (pixels)
-              trc                                   ;; data
-              color                               
-              ascii_16.fnt))
+    (for-each 
+      (lambda (v)
+        ;; Make trend plot
+        (let* ([name (car v)]                         ;; first element of main list
+               [vmin (cadr v)]                        ;; = (car (cdr v)) = second element of main list
+               [vmax (caddr v)]                       ;; = (car (cdr (cdr v) ) ) = third element ...
+               [color (cadddr v)]                     ;; = (car (cdr (cdr (cdr v) ) ) ) = fourth element ...
+               [trace-h (list-ref v 7)]               ;; seventh element of main list
+               [traceoffset (list-ref v 8)]           ;; eighth element of main list
+               [trace (string-append name "-trace")]
+               [wave (string-append name "-wave")])
+          ;; Define trace to plot waveform
+          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
+            (store-set! s trace trc)
+            ;; Clear the trace
+            (gltrace:clear trc)
+            ;; Draw a horizontal line below the trace widget
+            (glgui-box g (+ x 20) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 1 DimGray)
+            ;; Place the trace widget
+            (store-set! s wave (
+              glgui-trace-slider                       
+                g                                     ;; GUI container widget 
+                (+ x 20)                              ;; LLC x-coord (pixels)
+                (- (glgui-height-get) 50 (* 90 traceoffset)) ;; LLC y-coord (pixels)
+                (+ w 40)                              ;; width (pixels)
+                90                                    ;; height (pixels)
+                trc                                   ;; data
+                color                               
+                ascii_16.fnt))
+          )
+          (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
         )
-        (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
+        ;; Show each numeric beside the appropriate trace widgets
+        (let ([value (string-append (car v) "-value")]
+              [color (cadddr v)]
+              [lbl (list-ref v 4)]
+              [yoffset (list-ref v 6)])
+          (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
+        )
       )
-      ;; Show each numeric beside the appropriate trace widgets
-      (let ([value (string-append (car v) "-value")]
-            [color (cadddr v)]
-            [lbl (list-ref v 4)]
-            [yoffset (list-ref v 6)])
-        (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
-      ))
       vars
     )
     min_y
@@ -560,60 +560,65 @@
 ;; traceoffset: ordinal vertical offset of the trace band to use for the waveform?
 (define waves
   (list
-;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
-    (list "ICP"        0    100   Yellow      label_icp.img       "ICP"       1        200       1)
+;;        last_update name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset   duration  interval
+    (list (- ##now 1)      "icp"       0     100   Yellow      label_icp.img       "ICP"       0.5      200      1             140       0.1)
   )
 )
 
 (define (make-waves g x y0 s vars)
+  (display "make-waves : begin\n")
   (let* ([w wave_len] [h 100] [y (- y0 h)] [ws wave_len] [min_y 0])
     ;; Draw a horizontal line above the top trace widget
     (glgui-box g (+ x 20) (- (glgui-height-get) 650) (+ w 40) 1 DimGray)
-    (for-each (lambda (v)
-      ;; Make trend plot
-      (let* ([name (car v)]                         ;; first element of main list
-             [vmin (cadr v)]                        ;; = (car (cdr v)) = second element of main list
-             [vmax (caddr v)]                       ;; = (car (cdr (cdr v) ) ) = third element ...
-             [color (cadddr v)]                     ;; = (car (cdr (cdr (cdr v) ) ) ) = fourth element ...
-             [trace-h (list-ref v 7)]               ;; seventh element of main list
-             [traceoffset (list-ref v 8)]           ;; eighth element of main list
-             [trace (string-append name "-trace")]
-             [wave (string-append name "-wave")])
-        ;; Define trace to plot waveform
-        (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
-          (store-set! s trace trc)
-          ;; Clear the trace
-          (gltrace:clear trc)
-          ;; Draw a horizontal line below the trace widget
-          (glgui-box g (+ x 20) (- (glgui-height-get) 650 (* 150 traceoffset)) (+ w 40) 1 DimGray)
-          ;; Place the trace widget
-          (store-set! s wave (
-            glgui-trace-slider                       
-              g                                     ;; GUI container widget 
-              (+ x 20)                              ;; LLC x-coord (pixels)
-              (- (glgui-height-get) 650 (* 150 traceoffset)) ;; LLC y-coord (pixels)
-              (+ w 40)                              ;; width (pixels)
-              150                                   ;; height (pixels)
-              trc                                   ;; data
-              color                               
-              ascii_16.fnt))
+    (for-each
+      (lambda (v)
+        ;; Make trend plot
+        (let* ([name (cadr v)]                         
+               [vmin (caddr v)]                        
+               [vmax (cadddr v)]
+               [color (list-ref v 4)]    
+               [trace-h (list-ref v 8)]        
+               [traceoffset (list-ref v 9)]    
+               [trace (string-append name "-trace")]
+               [wave (string-append name "-wave")])
+          ;; Define trace to plot waveform
+          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
+            (store-set! s trace trc)
+            ;; Clear the trace
+            (gltrace:clear trc)
+            ;; Draw a horizontal line below the trace widget
+            (glgui-box g (+ x 20) (- (glgui-height-get) 650 (* 150 traceoffset)) (+ w 40) 1 DimGray)
+            ;; Place the trace widget
+            (store-set! s wave (
+              glgui-trace-slider                       
+                g                                     ;; GUI container widget 
+                (+ x 20)                              ;; LLC x-coord (pixels)
+                (- (glgui-height-get) 650 (* 150 traceoffset)) ;; LLC y-coord (pixels)
+                (+ w 40)                              ;; width (pixels)
+                150                                   ;; height (pixels)
+                trc                                   ;; data
+                color                               
+                ascii_16.fnt))
+          )
+          (set! min_y (- (glgui-height-get) 650 (* 150 traceoffset)))
         )
-        (set! min_y (- (glgui-height-get) 50 (* 150 traceoffset)))
+        ;; Show each numeric beside the appropriate trace widgets
+        (let ([value (string-append (cadr v) "-value")]
+              [color (list-ref v 4)]
+              [lbl (list-ref v 5)]
+              [yoffset (list-ref v 7)])
+          (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) 650 (* 150 yoffset)) lbl num_40.fnt color))
+        )
       )
-      ;; Show each numeric beside the appropriate trace widgets
-      (let ([value (string-append (car v) "-value")]
-            [color (cadddr v)]
-            [lbl (list-ref v 4)]
-            [yoffset (list-ref v 6)])
-        (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) (* 150 yoffset)) lbl num_40.fnt color))
-      ))
       vars
     )
     min_y
   )
+  (display "make-waves : end\n")
 )
 
 (define (init-gui-waves)
+  (display "init-waves : begin\n")
   (set! gui:waves (make-glgui))
   ;; Create waveforms and numerics
   (set! gui:waves-h (make-waves gui:waves 0 (- (glgui-height-get) 650) store waves))
@@ -648,37 +653,42 @@
       )
     )
   )
+  (display "init-waves : end\n")
 )
 
 ;; (update-waves store)
 ;;
 ;; Update the waves every interval using data from STORE
-(define last_wave_update 0)
-
 (define (update-waves store)
-  (if (> (- ##now last_wave_update) wave_update_interval)
-    (begin
-      
-      ;; Update the wave traces
-      (for-each (lambda (wave)
-                  (let* (
-                      [name (car wave)]
-                      [storename (list-ref wave 5)]
-                      [val (store-timedref store storename #f)]
-                      [trace (store-ref store (string-append name "-trace"))]
-                    )
-                    (gltrace-add trace val)
-                    (gltrace-update trace)
-                  )
-                )
-                (append trends (list (list "EventMarker" #f #f #f #f "EventMarker")))
+  (display "update-waves : begin\n")
+  ;; Update the wave traces
+  (for-each 
+    (lambda (wave)
+      (let* (
+          [last_update (car wave)]
+          [name (cadr wave)]
+          [storename (list-ref wave 6)]
+          [interval (list-ref wave 11)]
+          [val (store-timedref store storename #f)]
+          [trace (store-ref store (string-append name "-trace"))]
+        )
+        (display wave) (display "\n")
+        (if (> (- ##now last_update) interval)
+          (begin
+            (display "gltrace-add trace val\n")
+            (gltrace-add trace val)
+            (display "gltrace-update trace\n")
+            (gltrace-update trace)
+            (display "set-car! wave ##now\n")
+            (set-car! wave ##now) ;; Reset last update time
+          )
+        )
       )
-
-      ;; Reset last update time
-      (set! last_wave_update ##now)
-
     )
+    (display "appending event markers\n")
+    (append waves (list (list "EventMarker" #f #f #f #f "EventMarker")))
   )
+  (display "update-waves : end\n")
 )
 
 ;; -----------------------------------------------------------------------------
