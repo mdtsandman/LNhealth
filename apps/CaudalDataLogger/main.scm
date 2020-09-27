@@ -463,20 +463,23 @@
 (define last_trend_update 0)
 
 (define (update-trends store)
+  ;(display "update-trends : begin\n")
   (if (> (- ##now last_trend_update) trend_update_interval)
     (begin
       ;; Update the trend traces, including marker lines
-      (for-each (lambda (trend)
-                  (let* (
-                      [name (car trend)]
-                      [storename (list-ref trend 5)]
-                      [val (store-timedref store storename #f)]
-                      [trace (store-ref store (string-append name "-trace"))]
-                    )
-                    (gltrace-add trace val)
-                    (gltrace-update trace)
-                  )
-                )
+      (for-each 
+        (lambda (trend)
+          (let* (
+              [name (car trend)]
+              [storename (list-ref trend 5)]
+              [val (store-timedref store storename #f)]
+              [trace (store-ref store (string-append name "-trace"))]
+            )
+
+            (gltrace-add trace val)
+            (gltrace-update trace)
+          )
+        )
         (append trends (list (list "EventMarker" #f #f #f #f "EventMarker")))
       )
       ;; Reset last update time
@@ -487,15 +490,17 @@
       )
     )
   )
+  ;(display "update-trends : end\n")
 )
 
 ;; (update-values store)
 ;;
 ;; Update the values using data from STORE
 (define (update-values store)
+  ;(display "update-values : begin\n")
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
     (begin
-      ;; Update numerics (trends)
+      ;(display "numerics (trends) ...\n")
       (for-each 
         (lambda (trend)
           (let* (
@@ -504,27 +509,29 @@
               [val (store-timedref store storename #f)]
               [label (store-ref store (string-append name "-value"))]
             )
+            ;(display "[") (display name) (display "|") (display storename) (display "|") (display val) (display "]\n") 
             (glgui-widget-set! gui:trends label 'label (if val (number->string (fix val)) ""))
           )
         )
         trends
       )
-      ;; Update numerics (waves)
+      ;(display "numerics (waves) ...\n")
       (for-each 
         (lambda (wave)
+          ;(display wave) (display "\n")
           (let* (
-              [name (car wave)]
-              [storename (list-ref wave 5)]
+              [name (cadr wave)]
+              [storename (list-ref wave 6)]
               [val (store-timedref store storename #f)]
               [label (store-ref store (string-append name "-value"))]
             )
+            ;(display "[") (display name) (display "|") (display storename) (display "|") (display val) (display "]\n") 
             (glgui-widget-set! gui:waves label 'label (if val (number->string (fix val)) ""))
           )
         )
         waves
       )
-     ;; Update ticks (trends)
-      (display "Updating ticks (trends)\n")
+      ;(display "ticks (trends) ...\n")
       (let loop ((i 0) (t (- ##now trend_duration)))
         (if (fx= i num_trend_ticks) #f
           (let ([wgt (store-ref store (string-append "time-trends-" (number->string i)))])
@@ -533,8 +540,7 @@
           )
         )
       )
-      ;; Update ticks (waves)
-      (display "Updating ticks (waves)\n")
+      ;(display "ticks (waves) ...\n")
       (let loop ((i 0) (t (- ##now wave_duration)))
         (if (fx= i num_wave_ticks) #f
           (let ([wgt (store-ref store (string-append "time-waves-" (number->string i)))])
@@ -543,10 +549,11 @@
           )
         )
       )
-      ;; Update clock
+      ;(display "clock ...\n")
       (glgui-widget-set! gui:main clock 'label (seconds->string ##now "%T"))
     )
   )
+  ;(display "update-values : end\n")
 )
 
 ;; -----------------------------------------------------------------------------
@@ -560,13 +567,13 @@
 ;; traceoffset: ordinal vertical offset of the trace band to use for the waveform?
 (define waves
   (list
-;;        last_update name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset   duration  interval
-    (list (- ##now 1)      "icp"       0     100   Yellow      label_icp.img       "ICP"       0.5      200      1             140       0.1)
+;;        last_update      name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset   duration  interval
+    (list (- ##now 1)      "icp"       0     100   Yellow      label_icp.img       "Aomean"    0.5      200      1             140       0.1)
   )
 )
 
 (define (make-waves g x y0 s vars)
-  (display "make-waves : begin\n")
+  ;(display "make-waves : begin\n")
   (let* ([w wave_len] [h 100] [y (- y0 h)] [ws wave_len] [min_y 0])
     ;; Draw a horizontal line above the top trace widget
     (glgui-box g (+ x 20) (- (glgui-height-get) 650) (+ w 40) 1 DimGray)
@@ -614,11 +621,11 @@
     )
     min_y
   )
-  (display "make-waves : end\n")
+  ;(display "make-waves : end\n")
 )
 
 (define (init-gui-waves)
-  (display "init-waves : begin\n")
+  ;(display "init-waves : begin\n")
   (set! gui:waves (make-glgui))
   ;; Create waveforms and numerics
   (set! gui:waves-h (make-waves gui:waves 0 (- (glgui-height-get) 650) store waves))
@@ -653,14 +660,14 @@
       )
     )
   )
-  (display "init-waves : end\n")
+  ;(display "init-waves : end\n")
 )
 
 ;; (update-waves store)
 ;;
 ;; Update the waves every interval using data from STORE
 (define (update-waves store)
-  (display "update-waves : begin\n")
+  ;(display "update-waves : begin\n")
   ;; Update the wave traces
   (for-each 
     (lambda (wave)
@@ -672,23 +679,22 @@
           [val (store-timedref store storename #f)]
           [trace (store-ref store (string-append name "-trace"))]
         )
-        (display wave) (display "\n")
+        ;(display ##now) (display " - ") (display (car wave)) (display " = ") (display (- ##now (car wave))) (display "\n")
         (if (> (- ##now last_update) interval)
           (begin
-            (display "gltrace-add trace val\n")
+            ;(display "gltrace-add trace val\n")
             (gltrace-add trace val)
-            (display "gltrace-update trace\n")
+            ;(display "gltrace-update trace\n")
             (gltrace-update trace)
-            (display "set-car! wave ##now\n")
+            ;(display "set-car! wave ##now\n")
             (set-car! wave ##now) ;; Reset last update time
           )
         )
       )
     )
-    (display "appending event markers\n")
-    (append waves (list (list "EventMarker" #f #f #f #f "EventMarker")))
+    waves
   )
-  (display "update-waves : end\n")
+  ;(display "update-waves : end\n")
 )
 
 ;; -----------------------------------------------------------------------------
@@ -698,6 +704,8 @@
   
   ;; Initialize
   (lambda (w h)
+    
+    ;(display "Initializing ... \n")
     
     (if 
       (or 
@@ -740,14 +748,17 @@
     ;; Start the scheduler
     (scheduler-init)
   
+    ;(display "Initializing completed\n\n")
+
   )
 
   ;; Handle events
   (lambda (t x y)
-    (store-set! "main" "time_str" (seconds->string ##now "%H%M%S"))
+    
     (update-trends "main")
     (update-waves  "main")
     (update-values "main")
+    
     (if (= t EVENT_KEYPRESS)
       (if (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
         (cond 
@@ -784,21 +795,14 @@
           ]
         )
       )
-      (glgui-event 
-        (list 
-          gui:main
-          gui:trends
-          gui:waves
-        ) 
-        t 
-        x 
-        y
-      )
+      (glgui-event (list gui:main gui:trends gui:waves) t x y )
     )
+    
     ;; Garbage collect, sleep and iterate over new plugin data
     (##gc)                     ;; This calls the garbage collector
     (thread-sleep! 0.005)      ;; Sleep for 5 microseconds
     (scheduler-iterate)
+  
   )
 
   ;; Terminate
