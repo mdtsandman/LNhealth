@@ -65,6 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   "Aosys" "Aodia" "Aomean" "PRao"
   "RAPsys" "RAPdia" "RAPmean" "PRrap"
   "LAPsys" "LAPdia" "LAPmean" "PRlap"
+  "ICPsys" "ICPdia" "ICPmean"
   "Temp" "Trect" "Tblood" "Tcore" "Tesoph" "Tnaso" "Tamb"
   "SpO2" "PRspo2" "Perf" "sat_o2_freq"
   "SpO2 l" "PRspo2l" "Perf l"
@@ -74,7 +75,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   "CO2et" "CO2insp" "awRR"
   "BIS" "SQI" "EMG" "SEF"))
 (define ivue:waveform_basic '(
-  "I" "II" "III" "aVR" "aVL" "AVF" "V" "ABP" "ART" "PAP" "CVP" "Pleth" "PLETHl" "CO2" "EEG L"))
+  "I" "II" "III" "aVR" "aVL" "AVF" "V" "ABP" "ART" "PAP" "CVP" "Pleth" "PLETHl" "CO2" "EEG L" "ICP"))
 
 (define ivue:physdatavalues_aisys '(
   "RRaw" "SpRR"

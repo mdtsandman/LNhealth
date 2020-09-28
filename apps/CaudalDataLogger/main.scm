@@ -5,11 +5,17 @@
 
 ;; Global variables
 
-;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
-;(define rupi_port 8031)                       ;; prod
+;(define rupi:hostname "bcch-or.part-dns.org") ;; prod
+;(define rupi:port 8031)                       ;; prod
 
-(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
-(define rupi_port 8080)                       ;; demo
+(define rupi:hostname "ecem.ece.ubc.ca")      ;; demo
+(define rupi:port 8080)                       ;; demo
+
+(define rupi:key (u8vector 77 71 148 114 103 101 115 31))
+(define rupi:last-wave-request 0.)
+(define rupi:last-wave-update 0.)
+(define rupi:wave-request-frequency 1.)
+(define rupi:wave-update-frequency 0.1)
 
 (define screen_width 1600)
 (define screen_height 850)
@@ -18,11 +24,6 @@
 (define trend_duration 7200) ;;sec
 (define trend_len (fix (/ trend_duration trend_update_interval))) ;;sec
 (define num_trend_ticks 5)
-
-(define wave_update_interval 0.1) ;;sec
-(define wave_duration 140) ;;sec
-(define wave_len (fix (/ wave_duration wave_update_interval))) ;;sec
-(define num_wave_ticks 10)
 
 (define screenshot_time #f)
 (define quit_armed? #f)
@@ -229,7 +230,7 @@
         (instance-setvar! store "VNmonitor" "Location" location)
         (store-clear! store (map car (store-listcat store "remote")))
       )
-      (make-instance store "VNmonitor" "vitalnode" `("Location" ,location) `("Hostname" ,rupi_hostname))
+      (make-instance store "VNmonitor" "vitalnode" `("Location" ,location) `("Hostname" ,rupi:hostname))
     )
     (set! subject-location location)
   )
@@ -310,7 +311,7 @@
 )
 
 ;; -----------------------------------------------------------------------------
-;;  CONTAINER WIDGET FOR TRENDS
+;; TRENDS
 ;; -----------------------------------------------------------------------------
 (define gui:trends #f)
 ;; vmin & vmax: define the scale for each waveform
@@ -475,7 +476,6 @@
               [val (store-timedref store storename #f)]
               [trace (store-ref store (string-append name "-trace"))]
             )
-
             (gltrace-add trace val)
             (gltrace-update trace)
           )
@@ -500,7 +500,7 @@
   ;(display "update-values : begin\n")
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
     (begin
-      ;(display "numerics (trends) ...\n")
+      ;(display "trend numerics ...\n")
       (for-each 
         (lambda (trend)
           (let* (
@@ -515,37 +515,12 @@
         )
         trends
       )
-      ;(display "numerics (waves) ...\n")
-      (for-each 
-        (lambda (wave)
-          ;(display wave) (display "\n")
-          (let* (
-              [name (cadr wave)]
-              [storename (list-ref wave 6)]
-              [val (store-timedref store storename #f)]
-              [label (store-ref store (string-append name "-value"))]
-            )
-            ;(display "[") (display name) (display "|") (display storename) (display "|") (display val) (display "]\n") 
-            (glgui-widget-set! gui:waves label 'label (if val (number->string (fix val)) ""))
-          )
-        )
-        waves
-      )
-      ;(display "ticks (trends) ...\n")
+      ;(display "trend viewer ticks ...\n")
       (let loop ((i 0) (t (- ##now trend_duration)))
         (if (fx= i num_trend_ticks) #f
           (let ([wgt (store-ref store (string-append "time-trends-" (number->string i)))])
             (glgui-widget-set! gui:main wgt 'label (seconds->string t "%H:%M"))
             (loop (fx+ i 1) (fl+ t (flo (/ trend_duration (fx- num_trend_ticks 1)))))
-          )
-        )
-      )
-      ;(display "ticks (waves) ...\n")
-      (let loop ((i 0) (t (- ##now wave_duration)))
-        (if (fx= i num_wave_ticks) #f
-          (let ([wgt (store-ref store (string-append "time-waves-" (number->string i)))])
-            (glgui-widget-set! gui:main wgt 'label (seconds->string t "%H:%M:%S"))
-            (loop (fx+ i 1) (fl+ t (flo (/ wave_duration (fx- num_wave_ticks 1)))))
           )
         )
       )
@@ -557,145 +532,190 @@
 )
 
 ;; -----------------------------------------------------------------------------
-;;  CONTAINER WIDGET FOR WAVES
+;; WAVES
 ;; -----------------------------------------------------------------------------
+    
 (define gui:waves #f)
-;; vmin & vmax: define the scale for each waveform
-;; label.img:   must correspond to an item in the file STRINGS
-;; yoffset:     vertical offset of the numeric where 1.0 represents the width of one trend band?
-;; traceh:      width of the trend band, in pixels?
-;; traceoffset: ordinal vertical offset of the trace band to use for the waveform?
-(define waves
-  (list
-;;        last_update      name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset   duration  interval
-    (list (- ##now 1)      "icp"       0     100   Yellow      label_icp.img       "Aomean"    0.5      200      1             140       0.1)
-  )
-)
-
-(define (make-waves g x y0 s vars)
-  ;(display "make-waves : begin\n")
-  (let* ([w wave_len] [h 100] [y (- y0 h)] [ws wave_len] [min_y 0])
-    ;; Draw a horizontal line above the top trace widget
-    (glgui-box g (+ x 20) (- (glgui-height-get) 650) (+ w 40) 1 DimGray)
-    (for-each
-      (lambda (v)
-        ;; Make trend plot
-        (let* ([name (cadr v)]                         
-               [vmin (caddr v)]                        
-               [vmax (cadddr v)]
-               [color (list-ref v 4)]    
-               [trace-h (list-ref v 8)]        
-               [traceoffset (list-ref v 9)]    
-               [trace (string-append name "-trace")]
-               [wave (string-append name "-wave")])
-          ;; Define trace to plot waveform
-          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
-            (store-set! s trace trc)
-            ;; Clear the trace
-            (gltrace:clear trc)
-            ;; Draw a horizontal line below the trace widget
-            (glgui-box g (+ x 20) (- (glgui-height-get) 650 (* 150 traceoffset)) (+ w 40) 1 DimGray)
-            ;; Place the trace widget
-            (store-set! s wave (
-              glgui-trace-slider                       
-                g                                     ;; GUI container widget 
-                (+ x 20)                              ;; LLC x-coord (pixels)
-                (- (glgui-height-get) 650 (* 150 traceoffset)) ;; LLC y-coord (pixels)
-                (+ w 40)                              ;; width (pixels)
-                150                                   ;; height (pixels)
-                trc                                   ;; data
-                color                               
-                ascii_16.fnt))
-          )
-          (set! min_y (- (glgui-height-get) 650 (* 150 traceoffset)))
-        )
-        ;; Show each numeric beside the appropriate trace widgets
-        (let ([value (string-append (cadr v) "-value")]
-              [color (list-ref v 4)]
-              [lbl (list-ref v 5)]
-              [yoffset (list-ref v 7)])
-          (store-set! s value (glgui-valuelabel g (+ x w 150) (- (glgui-height-get) 650 (* 150 yoffset)) lbl num_40.fnt color))
-        )
-      )
-      vars
-    )
-    min_y
-  )
-  ;(display "make-waves : end\n")
-)
 
 (define (init-gui-waves)
-  ;(display "init-waves : begin\n")
+  
+  (display "init-gui-waves: begin\n")
+
+  (display "create container widget for waves\n")
   (set! gui:waves (make-glgui))
-  ;; Create waveforms and numerics
-  (set! gui:waves-h (make-waves gui:waves 0 (- (glgui-height-get) 650) store waves))
-  ;; Add a grid with time markers at bottom
-  (let* (
-      [y (- (glgui-height-get) 650 (* 150 1))]
-      [h (* 150 1)]
-      [w (+ wave_len 40)]
-      [num (fx- num_wave_ticks 1)]
-      [bw 1]
-    )
-    (let loop ([x 20] [i 0])
-      (if (fx> i num) #f
-        (begin
-          (glgui-box gui:waves x y bw h DimGray)
-          (store-set!
-            store 
-            (string-append "time-waves-" (number->string i))
-            (glgui-label 
-              gui:waves 
-              (if (fx< x 17) 0 (fx- x 17))  ;; LLC x
-              (fx- y 20)                    ;; LLC y
-              60                            ;; width
-              16                            ;; height
-              ""                            ;; text
-              ascii_16.fnt
-              Yellow
-            )
-          )
-          (loop (fx+ x (fix (/ w num))) (fx+ i 1))
-        )
-      )
+  
+  (display "create ICP valuelabel widget\n")
+  (set! icp_value 
+    (glgui-valuelabel 
+      gui:waves 
+      50
+      (- (glgui-height-get) 650)
+      label_hr.img
+      num_40.fnt
+      Yellow
     )
   )
-  ;(display "init-waves : end\n")
+  
+  (display "define ICP trace\n")
+  (set! icp_trace 
+    (make-gltrace
+      1000 ; width
+      200  ; height
+      GLTRACE_OVERWRITE
+      0    ; min value
+      100  ; max value
+      0    ; min value (for label)
+      100  ; max value (for label)
+    )
+  )
+  
+  (display "clear traces\n")
+  (for-each
+    (lambda (t) 
+      (gltrace:clear t)
+    )
+    (list icp_trace)
+  )
+  
+  (display "place the ICP trace\n")
+  (set! icp_wave
+    (glgui-trace
+      gui:waves
+      50  ; LLC x
+      (- (glgui-height-get) 650)  ; LLC y
+      1000  ; width
+      200   ; height
+      icp_trace
+      Yellow
+    )
+  )
+
+  (display "init-gui-waves: end\n")
+
 )
 
-;; (update-waves store)
-;;
-;; Update the waves every interval using data from STORE
-(define (update-waves store)
+(define (update-waves location)
+  
   ;(display "update-waves : begin\n")
-  ;; Update the wave traces
-  (for-each 
-    (lambda (wave)
+  ;(display ##now) (display " - ") (display rupi:last-wave-update) (display " = ") (display (- ##now rupi:last-wave-update)) (display "\n")
+  ;(display "request new values\n")
+  (if (fl> (fl- ##now rupi:last-wave-update) rupi:wave-update-frequency)
+    (begin
+      (waveform-add 
+        location 
+        "ICP" 
+        (store-ref location "icp-trace") 
+        rupi:wave-request-frequency 
+        rupi:wave-update-frequency
+      )
+      (set! rupi:last-wave-update ##now)
+    )
+  )
+
+  ;(display "request new data\n")
+  (if (fl> (fl- ##now rupi:last-wave-request) rupi:wave-request-frequency)
+    (begin
+      (set! rupi:last-wave-request ##now)
+      ;; request new data
       (let* (
-          [last_update (car wave)]
-          [name (cadr wave)]
-          [storename (list-ref wave 6)]
-          [interval (list-ref wave 11)]
-          [val (store-timedref store storename #f)]
-          [trace (store-ref store (string-append name "-trace"))]
+          [rupi:addr (
+              with-exception-catcher
+              (lambda (e) #f)
+              (lambda () (car (host-info-addresses (host-info rupi:hostname))))
+            )
+          ]
+          [rc (rupi-client 0 rupi:key rupi:addr rupi:port)]
+          [data (rupi-cmd rc "GETWAVES" location)]
         )
-        ;(display ##now) (display " - ") (display (car wave)) (display " = ") (display (- ##now (car wave))) (display "\n")
-        (if (> (- ##now last_update) interval)
+        (if (list-notempty? data) ;; data is always a list
           (begin
-            ;(display "gltrace-add trace val\n")
-            (gltrace-add trace val)
-            ;(display "gltrace-update trace\n")
-            (gltrace-update trace)
-            ;(display "set-car! wave ##now\n")
-            (set-car! wave ##now) ;; Reset last update time
+            (waveform-add-rest location "ICP" icp_trace)
+            ;; flush local stores, then append the new data
+            (store-update-data data)
+            (for-each
+              (lambda (t)
+                (set-waveform-length location t)
+              )
+              (list icp_trace)
+            )
           )
         )
       )
     )
-    waves
   )
+  
   ;(display "update-waves : end\n")
+
 )
+
+;; save the received waveform lengths
+(define (set-waveform-length store wave)
+  (let ([val (store-ref store wave '())])
+    ;; check whether they actually contain proper values; otherwise zero them
+    (if (= (sum val) 0)
+      (begin
+        (store-set! store (string-append wave "-len") 0)
+        (store-set! store wave '())
+      )
+      (store-set! store (string-append wave "-len") (length val))
+    )
+  )  
+)
+
+;; Add remaining parts of the waveform
+(define (waveform-add-rest location wave_name trace)
+  (let ([wave_val (store-ref location wave_name)])
+    (if (list-notempty? wave_val)
+      (let ([num-samples (length wave_val)])
+        (let loop ([i 0])
+          (if (< i num-samples)
+            (begin
+              (gltrace-add trace (list-ref wave_val i))
+              (loop (+ i 1))
+            )
+          )
+        )
+      )
+    )
+  )
+)
+
+;; retrieve data for a given waveform and update the trace by appending the obtained data
+(define (waveform-add location wave_name trace overall_time window_time)
+  (let (
+      [wave_val (store-ref location wave_name)]
+      [wave_len (store-ref location (string-append wave_name "-len") 0)]
+    )
+    (if (list-notempty? wave_val)
+      (let ([num_samples (inexact->exact (floor (* (/ wave_len overall_time) window_time)))])
+        (let loop ([i 0])
+          (if (and (< i num_samples) (< i (length wave_val)))
+            (begin
+              (gltrace-add trace (list-ref wave_val i))
+              (loop (+ i 1))
+            )
+          )
+        )
+        (if (< num_samples (length wave_val))
+          (store-set! location wave_name (list-tail wave_val num_samples))
+          (store-set! location wave_name '())
+        )
+      )
+    )
+  )
+)
+
+
+
+
+;; -----------------------------------------------------------------------------
+;; Helpers
+;; -----------------------------------------------------------------------------
+  ;; Check for empty lists
+  (define (list-notempty? lst)
+    (and (list? lst) (not (null? lst)))
+  )
+
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN PROGRAM
@@ -705,7 +725,7 @@
   ;; Initialize
   (lambda (w h)
     
-    ;(display "Initializing ... \n")
+    (display "\nInitializing ... \n")
     
     (if 
       (or 
@@ -725,10 +745,9 @@
         [rupi:addr (
             with-exception-catcher
             (lambda (e) #f)
-            (lambda () (car (host-info-addresses (host-info rupi_hostname))))
+            (lambda () (car (host-info-addresses (host-info rupi:hostname))))
           )
         ]
-        [rupi:port rupi_port]
         [rupi:key (u8vector 77 71 148 114 103 101 115 31)]
         [rc (rupi-client 0 rupi:key rupi:addr rupi:port)]
         [rooms (rupi-cmd rc "GETOVERVIEW" "")]
@@ -748,7 +767,7 @@
     ;; Start the scheduler
     (scheduler-init)
   
-    ;(display "Initializing completed\n\n")
+    (display "Initializing completed\n\n")
 
   )
 

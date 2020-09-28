@@ -8,4 +8,4 @@ cmssdc.ttf 16 "P\$_{ET}\$CO\$_2\$"      label_pco2_et
 cmssdc.ttf 16 "RR"                      label_rr
 cmssdc.ttf 16 "PEEP"                    label_peep
 cmssdc.ttf 16 "PIP"                     label_pip
-cmssdc.ttf 16 "ICP"                     label_icp
+cmssdc.ttf 16 "ICP\$_(caudal)\$"        label_icp
