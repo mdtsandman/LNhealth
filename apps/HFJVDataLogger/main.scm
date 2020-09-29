@@ -21,11 +21,11 @@
   (list (list "Surgery paused:" #f) "Surgery resumed" (list "HFJV paused:" #f) "HFJV resumed")
 )
 
-(define rupi_hostname "bcch-or.part-dns.org") ;; prod
-(define rupi_port 8031)                       ;; prod
+;(define rupi_hostname "bcch-or.part-dns.org") ;; prod
+;(define rupi_port 8031)                       ;; prod
 
-;(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
-;(define rupi_port 8080)                       ;; demo
+(define rupi_hostname "ecem.ece.ubc.ca")      ;; demo
+(define rupi_port 8080)                       ;; demo
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN GUI
@@ -539,6 +539,15 @@
         [rooms (rupi-cmd rc "GETOVERVIEW" "")]
       )
       (if (pair? rooms) (set! or-list (sort (map car rooms) string<?)))
+      (display "\n")
+      (display rupi_hostname)
+      (display "\n")
+      (display rupi:port)
+      (display "\n")
+      (display rupi:addr)
+      (display "\n")
+      (display rooms)
+      (display "\n")
     )
 
     ;; Initialize the monitor connection

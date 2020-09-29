@@ -3,13 +3,18 @@
 ;; Shaylene Beaudry 2017
 ;; Mike Traynor 2020
 
+
+;; -----------------------------------------------------------------------------
 ;; Global variables
+;; -----------------------------------------------------------------------------
 
-;(define rupi:hostname "bcch-or.part-dns.org") ;; prod
-;(define rupi:port 8031)                       ;; prod
-
-(define rupi:hostname "ecem.ece.ubc.ca")      ;; demo
-(define rupi:port 8080)                       ;; demo
+(define server "demo")  ;; "demo" or "prod"
+(define rupi:envs
+  (list
+    (list "bcch-or.part-dns.org" 8031) ;; production environment (ivue)
+    (list "ecem.ece.ubc.ca" 8080) ;; demo server (S5)
+  )
+)
 
 (define rupi:key (u8vector 77 71 148 114 103 101 115 31))
 (define rupi:last-wave-request 0.)
@@ -28,8 +33,8 @@
 (define screenshot_time #f)
 (define quit_armed? #f)
 
-(define or-list (list))      ;; list of all monitoring locations
-(define subject-location #f) ;; monitoring location for current subject
+(define or_list (list))      ;; list of all monitoring locations
+(define subject_location #f) ;; monitoring location for current subject
 
 (define markers_timeline 
   (list "Caudal injection start" "Caudal injection end" "Surgery start" "Surgery end")
@@ -37,8 +42,6 @@
 (define markers_events
   (list "Patient movement" (list "Fentanyl bolus:" #f) (list "Propofol bolus:" #f))
 )
-
-
 
 
 ;; -----------------------------------------------------------------------------
@@ -170,8 +173,11 @@
 ;;  SETUP DIALOG
 ;; -----------------------------------------------------------------------------
 (define (init-gui-setup)
+  
   (let ([w 300] [h 270]) ;; dimensions of popup dialog for entry of setup info
+    
     (let ([x (+ 1000 (/ (- 380 w) 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup over the log widget
+      
       (set! gui:setup (glgui-container gui:main x y w h))
       (glgui-box gui:setup 0 0 w h CornflowerBlue)
 
@@ -200,12 +206,27 @@
       ;; location list
       (set! location-label (glgui-label gui:setup 20 (- h 55 (* 30 4) 5) 100 30 "Location: " ascii_24.fnt White))
       (glgui-widget-set! gui:setup location-label 'align GUI_ALIGNRIGHT)
-      (set! location-dropdown (glgui-dropdownbox gui:setup (+ 20 100) (- h 55 (* 30 3) 25 10) (- w 40 100) 35
-        (map (lambda (str) (lambda (lg lw x y w h s)
-          (if s (glgui:draw-box x y w h Grey))
-            (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)))
-          or-list)
-        Black DarkGrey Blue))
+      (set! location-dropdown 
+        (glgui-dropdownbox 
+          gui:setup 
+          (+ 20 100) 
+          (- h 55 (* 30 3) 25 10) 
+          (- w 40 100) 
+          35
+          (map 
+            (lambda (str) 
+              (lambda (lg lw x y w h s)
+                (if s (glgui:draw-box x y w h Grey))
+                (glgui:draw-text-left (+ x 5) y (- w 10) h str ascii_24.fnt Black)
+              )
+            )
+            or_list
+          )
+          Black 
+          DarkGrey 
+          Blue
+        )
+      )
       (glgui-widget-set! gui:setup location-dropdown 'callback location-callback)
 
       ;; start button
@@ -222,17 +243,18 @@
 (define (location-callback g w t x y)
   ;; Get data from rupi
   (let* (
+      [rupi:env (if (string=? server "prod") (car rupi:envs) (cadr rupi:envs))]
       [cur (glgui-widget-get g w 'current)]
-      [location (list-ref or-list cur)]
+      [location (list-ref or_list cur)]
     )
-    (if subject-location  ;; subject-location is a global var
+    (if subject_location  ;; subject_location is a global var
       (begin
         (instance-setvar! store "VNmonitor" "Location" location)
         (store-clear! store (map car (store-listcat store "remote")))
       )
-      (make-instance store "VNmonitor" "vitalnode" `("Location" ,location) `("Hostname" ,rupi:hostname))
+      (make-instance store "VNmonitor" "vitalnode" `("Location" ,location) `("Hostname" ,(car rupi:env)))
     )
-    (set! subject-location location)
+    (set! subject_location location)
   )
 )
 
@@ -293,7 +315,7 @@
       
       ;; Log the demographics
       (store-event-add store 0 (string-append "Patient: BCCH-" (number->string subject-num)))
-      (store-event-add store 0 (string-append "Location: " subject-location))
+      (store-event-add store 0 (string-append "Location: " subject_location))
       (store-event-add store 0 (string-append "Age: " (number->string subject-age)))
       (store-event-add store 0 (string-append "Sex: " subject-sex))
       (glgui-widget-set! gui:main log-list 'list (build-log-list))
@@ -347,16 +369,20 @@
     (for-each 
       (lambda (v)
         ;; Make trend plot
-        (let* ([name (car v)]                         ;; first element of main list
-               [vmin (cadr v)]                        ;; = (car (cdr v)) = second element of main list
-               [vmax (caddr v)]                       ;; = (car (cdr (cdr v) ) ) = third element ...
-               [color (cadddr v)]                     ;; = (car (cdr (cdr (cdr v) ) ) ) = fourth element ...
-               [trace-h (list-ref v 7)]               ;; seventh element of main list
-               [traceoffset (list-ref v 8)]           ;; eighth element of main list
-               [trace (string-append name "-trace")]
-               [wave (string-append name "-wave")])
+        (let* (
+            [name (car v)]                         
+            [vmin (cadr v)] 
+            [vmax (caddr v)] 
+            [color (cadddr v)]  
+            [trace-h (list-ref v 7)]    
+            [traceoffset (list-ref v 8)]  
+            [trace (string-append name "-trace")]
+            [wave (string-append name "-wave")]
+          )
           ;; Define trace to plot waveform
-          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
+          (let (
+              [trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)]
+            )
             (store-set! s trace trc)
             ;; Clear the trace
             (gltrace:clear trc)
@@ -372,7 +398,8 @@
                 90                                    ;; height (pixels)
                 trc                                   ;; data
                 color                               
-                ascii_16.fnt))
+                ascii_16.fnt)
+            )
           )
           (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
         )
@@ -398,9 +425,9 @@
   (set! gui:trends-h (make-trends gui:trends 0 (- (glgui-height-get) 50) store trends))
 
   ;; Marker trace
-  (let
-    ( [trace
-        (make-gltrace    ;; This is the trace itself
+  (let ( 
+      [trace
+        (make-gltrace   ;; This is the trace itself
           trend_len     ;; Width
           100           ;; Height
           GLTRACE_SHIFT ;; Mode (SHIFT, OVERWRITE, RESET)
@@ -537,30 +564,32 @@
     
 (define gui:waves #f)
 
+(define icp_str "ECG1")
+
 (define (init-gui-waves)
   
-  (display "init-gui-waves: begin\n")
+  ;(display "init-gui-waves: begin\n")
 
-  (display "create container widget for waves\n")
+  ;(display "create container widget for waves\n")
   (set! gui:waves (make-glgui))
   
-  (display "create ICP valuelabel widget\n")
+  ;(display "create ICP valuelabel widget\n")
   (set! icp_value 
     (glgui-valuelabel 
       gui:waves 
-      50
+      20
       (- (glgui-height-get) 650)
-      label_hr.img
+      label_icp.img
       num_40.fnt
-      Yellow
+      Orange
     )
   )
   
-  (display "define ICP trace\n")
+  ;(display "define ICP trace\n")
   (set! icp_trace 
     (make-gltrace
       1000 ; width
-      200  ; height
+      150  ; height
       GLTRACE_OVERWRITE
       0    ; min value
       100  ; max value
@@ -569,7 +598,7 @@
     )
   )
   
-  (display "clear traces\n")
+  ;(display "clear traces\n")
   (for-each
     (lambda (t) 
       (gltrace:clear t)
@@ -577,67 +606,106 @@
     (list icp_trace)
   )
   
-  (display "place the ICP trace\n")
+  ;(display "place the ICP trace\n")
   (set! icp_wave
     (glgui-trace
       gui:waves
-      50  ; LLC x
+      20  ; LLC x
       (- (glgui-height-get) 650)  ; LLC y
       1000  ; width
-      200   ; height
+      150   ; height
       icp_trace
-      Yellow
+      Orange
     )
   )
 
-  (display "init-gui-waves: end\n")
+  ;(display "add a grid with time markers at bottom - TODO\n")
+  (let* (
+      [x 20]
+      [y (- (glgui-height-get) 650 150)]
+      [h 150]
+      [w 1000]
+      [c Orange]
+    )
+    (glgui-box gui:waves x y 1 h c)
+    (glgui-box gui:waves (+ x w) y 1 h c)
+    (glgui-box gui:waves x y w 1 c)
+    (glgui-box gui:waves x (+ y h) w 1 c)
+  )
+
+  ;(display "init-gui-waves: end\n")
 
 )
 
-(define (update-waves location)
+(define (update-waves store)
   
   ;(display "update-waves : begin\n")
+  
   ;(display ##now) (display " - ") (display rupi:last-wave-update) (display " = ") (display (- ##now rupi:last-wave-update)) (display "\n")
+  
   ;(display "request new values\n")
   (if (fl> (fl- ##now rupi:last-wave-update) rupi:wave-update-frequency)
     (begin
       (waveform-add 
-        location 
-        "ICP" 
-        (store-ref location "icp-trace") 
-        rupi:wave-request-frequency 
+        store
+        icp_str
+        (store-ref store icp_str)
+        rupi:wave-request-frequency
         rupi:wave-update-frequency
       )
       (set! rupi:last-wave-update ##now)
     )
   )
 
-  ;(display "request new data\n")
   (if (fl> (fl- ##now rupi:last-wave-request) rupi:wave-request-frequency)
     (begin
       (set! rupi:last-wave-request ##now)
-      ;; request new data
       (let* (
+          [rupi:env (if (string=? server "prod") (car rupi:envs) (cadr rupi:envs))]
+          [rupi:host (car rupi:env)]
+          [rupi:port (cadr rupi:env)]
           [rupi:addr (
-              with-exception-catcher
+            with-exception-catcher
               (lambda (e) #f)
-              (lambda () (car (host-info-addresses (host-info rupi:hostname))))
+              (lambda () (car (host-info-addresses (host-info rupi:host))))
             )
           ]
-          [rc (rupi-client 0 rupi:key rupi:addr rupi:port)]
-          [data (rupi-cmd rc "GETWAVES" location)]
+          [rc (rupi-client 0 rupi:key rupi:addr rupi:port)] ;; rupi:key is global
+          [data (rupi-cmd rc "GETWAVES" "" subject_location)]
         )
         (if (list-notempty? data) ;; data is always a list
+            
           (begin
-            (waveform-add-rest location "ICP" icp_trace)
+            (display "\n")
+            (display data)
+            (display "\n")
+            ;(display ts)
+            ;(display "\n")
+          
+            
+            ;(for-each
+            ;  (lambda (wave)
+            ;    (display wave) (display "\n")
+            ;  )
+            ;  waves
+            ;)
+          )
+#|
+          (begin
+            (waveform-add-rest store icp_str icp_trace)
             ;; flush local stores, then append the new data
             (store-update-data data)
             (for-each
               (lambda (t)
-                (set-waveform-length location t)
+                (set-waveform-length store t)
               )
               (list icp_trace)
             )
+          )
+|#
+
+          (begin
+            (display "Unable to obtain waveforms from server for location: ") (display subject_location) (display "\n")
           )
         )
       )
@@ -663,8 +731,8 @@
 )
 
 ;; Add remaining parts of the waveform
-(define (waveform-add-rest location wave_name trace)
-  (let ([wave_val (store-ref location wave_name)])
+(define (waveform-add-rest store wave_name trace)
+  (let ([wave_val (store-ref store wave_name)])
     (if (list-notempty? wave_val)
       (let ([num-samples (length wave_val)])
         (let loop ([i 0])
@@ -681,10 +749,10 @@
 )
 
 ;; retrieve data for a given waveform and update the trace by appending the obtained data
-(define (waveform-add location wave_name trace overall_time window_time)
+(define (waveform-add store wave_name trace overall_time window_time)
   (let (
-      [wave_val (store-ref location wave_name)]
-      [wave_len (store-ref location (string-append wave_name "-len") 0)]
+      [wave_val (store-ref store wave_name)]
+      [wave_len (store-ref store (string-append wave_name "-len") 0)]
     )
     (if (list-notempty? wave_val)
       (let ([num_samples (inexact->exact (floor (* (/ wave_len overall_time) window_time)))])
@@ -697,8 +765,8 @@
           )
         )
         (if (< num_samples (length wave_val))
-          (store-set! location wave_name (list-tail wave_val num_samples))
-          (store-set! location wave_name '())
+          (store-set! store wave_name (list-tail wave_val num_samples))
+          (store-set! store wave_name '())
         )
       )
     )
@@ -742,17 +810,53 @@
     
     ;; See if we can get a better list of OR names from the vitalnode
     (let* (
+        [rupi:env (if (string=? server "prod") (car rupi:envs) (cadr rupi:envs))]
+        [rupi:host (car rupi:env)]
+        [rupi:port (cadr rupi:env)]
         [rupi:addr (
             with-exception-catcher
             (lambda (e) #f)
-            (lambda () (car (host-info-addresses (host-info rupi:hostname))))
+            (lambda () (car (host-info-addresses (host-info rupi:host))))
           )
         ]
-        [rupi:key (u8vector 77 71 148 114 103 101 115 31)]
-        [rc (rupi-client 0 rupi:key rupi:addr rupi:port)]
+        [rc (rupi-client 0 rupi:key rupi:addr rupi:port)] ;; rupi:key is global
         [rooms (rupi-cmd rc "GETOVERVIEW" "")]
+        [trends (rupi-cmd rc "GETTRENDS" "")]
+        [waves (rupi-cmd rc "GETWAVES" "")]
       )
-      (if (pair? rooms) (set! or-list (sort (map car rooms) string<?)))
+      
+      (display rupi:addr)
+
+      (display "\n")
+
+      (if (pair? trends)
+        (begin
+          (display trends) (display "\n")
+        )
+        (display "Failed to get trend data\n")
+      )
+      
+      (if (pair? waves)
+        (begin
+          (display waves) (display "\n")
+        )
+        (display "Failed to get wave data\n")
+      )
+      
+      (if (pair? rooms) 
+        (begin
+          (set! or_list (sort (map car rooms) string<?))
+          (for-each 
+            (lambda (room)
+              (display room) (display "\n")
+            )
+            rooms
+          )
+        )
+        (begin
+          (display "Unable to get location list ... terminating\n") (terminate)
+        )
+      )
     )
 
     ;; Initialize the store (connection to monitor)
@@ -818,8 +922,8 @@
     )
     
     ;; Garbage collect, sleep and iterate over new plugin data
-    (##gc)                     ;; This calls the garbage collector
-    (thread-sleep! 0.005)      ;; Sleep for 5 microseconds
+    (##gc)                    ;; This calls the garbage collector
+    (thread-sleep! 0.005)     ;; Sleep for 5 microseconds
     (scheduler-iterate)
   
   )
