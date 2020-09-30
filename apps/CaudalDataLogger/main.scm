@@ -674,22 +674,24 @@
           [data (rupi-cmd rc "GETWAVES" "" subject_location)]
         )
         (if (list-notempty? data) ;; data is always a list
-            
-          (begin
+          (let (
+              [rm (caar data)]
+              [ts (cdadar data)]
+              [waves (cdddar data)]
+            )
             (display "\n")
-            (display data)
+            (display rm)
             (display "\n")
-            ;(display ts)
-            ;(display "\n")
-          
-            
-            ;(for-each
-            ;  (lambda (wave)
-            ;    (display wave) (display "\n")
-            ;  )
-            ;  waves
-            ;)
+            (display ts)
+            (display "\n")
+            (for-each
+              (lambda (wave)
+                (display wave) (display "\n")
+              )
+              waves
+            )
           )
+        
 #|
           (begin
             (waveform-add-rest store icp_str icp_trace)
@@ -707,6 +709,7 @@
           (begin
             (display "Unable to obtain waveforms from server for location: ") (display subject_location) (display "\n")
           )
+        
         )
       )
     )
