@@ -8,7 +8,7 @@
 ;; Global variables
 ;; -----------------------------------------------------------------------------
 
-(define server "demo")  ;; "demo" or "prod"
+(define server "prod")  ;; "demo" or "prod"
 
 (define rupi:envs
   (list
