@@ -545,7 +545,7 @@
               [val (store-timedref store storename #f)]
               [label (store-ref store (string-append name "-value"))]
             )
-            ;(db "[") (db name) (db "|") (db storename) (db "|") (db val) (db "]\n") 
+            (db (list "[" name "|" storename "|" val "]\n")) 
             (glgui-widget-set! gui:trends label 'label (if val (number->string (fix val)) ""))
           )
         )
@@ -620,22 +620,23 @@
   (set! icp_wave
     (glgui-trace
       gui:waves
-      20  ; LLC x
+      20                              ; LLC x
       (- (glgui-height-get) 150 650)  ; LLC y
-      1000  ; width
-      150   ; height
+      (- (glgui-width-get) 20 20)     ; width
+      150                             ; height
       icp_trace
       Orange
     )
   )
 
-  (db "add a grid with time markers at bottom - TODO\n")
+  (db "draw box around waveform widget\n")
+  (db "TODO - add a grid with time markers at bottom\n")
   (let* (
       [x 20]
       [y (- (glgui-height-get) 650 150)]
       [h 150]
-      [w 1000]
-      [c Orange]
+      [w (- (glgui-width-get) 20 20)]
+      [c DimGray]
     )
     (glgui-box gui:waves x y 1 h c)
     (glgui-box gui:waves (+ x w) y 1 h c)
