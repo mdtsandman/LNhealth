@@ -22,7 +22,7 @@
 )
 
 (define debug
-  (if (string=? server "demo") #f #f)
+  (if (string=? server "demo") #t #f)
 )
 
 (define rupi:key (u8vector 77 71 148 114 103 101 115 31))
@@ -885,9 +885,9 @@
 ;; -----------------------------------------------------------------------------
 (main
   
-  ;; Initialize
+	;; Initialize
   (lambda (w h)
-    
+   
     (db "\nInitializing ... \n")
     
     (if 
@@ -929,7 +929,7 @@
           )
         )
         (begin
-          (db "Unable to get location list ... terminating\n")
+          (display "Unable to get location list ... terminating\n")
           (terminate)
         )
       )
