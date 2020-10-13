@@ -8,7 +8,18 @@
 ;; Global variables
 ;; -----------------------------------------------------------------------------
 
-(define server "prod")  ;; "demo" or "prod"
+(define server "demo")  ;; "demo" or "prod"
+
+(define icp_str
+  (if (string=? server "demo") "INVP1" "ICP")
+)
+
+(define debug
+  (if (string=? server "demo") #t #f)
+)
+
+;; Dimensions that work with my Lenovo X1 Carbon laptop :)
+(define screen_width 1600) (define screen_height 850)
 
 (define rupi:envs
   (list
@@ -17,22 +28,15 @@
   )
 )
 
-(define icp_str 
-  (if (string=? server "demo") "INVP1" "ICP")
-)
-
-(define debug
-  (if (string=? server "demo") #t #f)
-)
-
 (define rupi:key (u8vector 77 71 148 114 103 101 115 31))
-(define rupi:last-wave-request 0.)
-(define rupi:last-wave-update 0.)
-(define rupi:wave-request-frequency 1.)
-(define rupi:wave-update-frequency 0.1)
 
-(define screen_width 1600)
-(define screen_height 850)
+;; freq that **batch** data is requested from server
+(define rupi:wave-request-frequency 1.)
+(define rupi:last-wave-request 0.)
+
+;; data sampling frequency (determines time btwn data points)
+(define rupi:wave-update-frequency 0.1)
+(define rupi:last-wave-update 0.)
 
 (define trend_update_interval 10) ;;sec
 (define trend_duration 7200) ;;sec
@@ -88,14 +92,20 @@
   )
 
   ;; Event buttons
-  (let ([w 180] [x (- (glgui-width-get) 180 20)] [y (- (glgui-height-get) 100 (* 35 4)) ])
+  (let (
+      [w 180]
+      [x (- (glgui-width-get) 180 20)]
+      [y (- (glgui-height-get) 100 (* 35 4)) ]
+    )
     (let loop ([i 0])
       (if (< i (length markers_events))
         (let ([marker (list-ref markers_events i)])
           (if marker
             (let ([cl (list? marker)])
-              (let 
-                ([str (if cl (car marker) marker)] [cb (if cl marker-freetext-callback marker-callback)])
+              (let (
+                  [str (if cl (car marker) marker)]
+                  [cb (if cl marker-freetext-callback marker-callback)]
+                )
                 (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt cb))
                 (glgui-widget-set! gui:main bs 'value -1)
                 (if cl (glgui-widget-set! gui:main bs 'color CornflowerBlue))
@@ -109,7 +119,13 @@
   )
 
   ;; Logging List
-  (let ( [x 1000] [y (- (glgui-height-get) 50 )] [w 380] [num_rows 18] [row_height 30] )
+  (let (
+      [x 1000]
+      [y (- (glgui-height-get) 50 )]
+      [w 380]
+      [num_rows 18]
+      [row_height 30]
+    )
     ;;Header row
     (glgui-label gui:main (+ x  5) y 70         row_height "Time"      ascii_16.fnt White)
     (glgui-label gui:main (+ x 75) y (- w 75 5) row_height "Log Entry" ascii_16.fnt White)
@@ -119,7 +135,7 @@
     (set! log-list (glgui-list gui:main x (- y (* (+ num_rows 1) row_height)) w (* num_rows row_height) row_height (build-log-list) #f))
   ) 
 
-) ;; end of init-gui-main definition
+)
 
 ;; Other markers
 (define (marker-callback g w t x y)
@@ -158,7 +174,10 @@
 (define (build-log-list)
   (let ([logs (store-event-listnew store)])
     (if logs
-      (let loop ([i 0] [result (list)])
+      (let loop (
+          [i 0]
+          [result (list)]
+        )
         (if (= i (length logs)) result
           (loop (+ i 1) (append result (list (log-list-element (list-ref logs i)))))
         )
@@ -185,7 +204,11 @@
   
   (let ([w 300] [h 270]) ;; dimensions of popup dialog for entry of setup info
     
-    (let ([x (+ 1000 (/ (- 380 w) 2))] [y (- (/ (glgui-height-get) 2) (/ h 2))]) ;; center the popup over the log widget
+    (let (
+        ;; center the popup over the log widget
+        [x (+ 1000 (/ (- 380 w) 2))]
+        [y (- (/ (glgui-height-get) 2) (/ h 2))]
+      ) 
       
       (set! gui:setup (glgui-container gui:main x y w h))
       (glgui-box gui:setup 0 0 w h CornflowerBlue)
@@ -292,29 +315,50 @@
         "main"                                ;; store name
         "ALLTRENDS"                           ;; name of plugin instance
         "trendoutput"                         ;; plugin name
-        `("Trends"                            ;; configuration options to be passed to plugin
-          ,(append (list "time_str")
+        `("Trends"                            ;; configuration options to be passed to plugin    
+          ,(append 
+            (list "time_str")
             (append 
-              ivue:physdatavalues_basic 
+              ivue:physdatavalues_basic       ;; includes ivue_timestamp
               ivue:physdatavalues_aisys 
               ivue:physdatavalues_nirs
+              ivue:physdatavalues_tcco2
             )
           )
         )
       )
       
-      ;; Record the waveforms
-      (let ((waves (append ivue:waveform_basic ivue:waveforms_aisys)))
+      ;; Record ivue waveforms
+      (let ([waves (append ivue:waveform_basic ivue:waveforms_aisys)])
         (for-each 
-          (lambda (l) 
-            (make-instance
-              "main"
-              (string-append "WAVEOUT" l)
-              "waveoutput" 
-              `("Source" ,l)
+          (lambda (l)
+            (make-instance                    
+              "main"                          ;; store name  
+              (string-append "WAVEOUT" l)     ;; name of plugin instance
+              "waveoutput"                    ;; plugin name
+              `("Source" ,l)                  ;; configuration options to be passed to plugin
             )
           ) 
           waves
+        )
+      )
+ 
+      ;; For demo server, need to use s5 labels for waveforms
+      (if (string=? server "demo")
+        (begin
+          (let ([waves (list icp_str)])
+            (for-each 
+              (lambda (l) 
+                (make-instance
+                  "main"                          ;; store name
+                  (string-append "WAVEOUT" l)     ;; name of plugin instance
+                  "waveoutput"                    ;; plugin name
+                  `("Source" ,l)                  ;; configuration options to be passed to plugin
+                )
+              ) 
+              waves
+            )
+          )
         )
       )
 
@@ -500,7 +544,7 @@
 (define last_trend_update 0)
 
 (define (update-trends store)
-  (db "update-trends : begin\n")
+  ;(db "update-trends : begin\n")
   (if (> (- ##now last_trend_update) trend_update_interval)
     (begin
       ;; Update the trend traces, including marker lines
@@ -526,17 +570,17 @@
       )
     )
   )
-  (db "update-trends : end\n")
+  ;(db "update-trends : end\n")
 )
 
 ;; (update-values store)
 ;;
 ;; Update the values using data from STORE
 (define (update-values store)
-  (db "update-values : begin\n")
+  ;(db "update-values : begin\n")
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
     (begin
-      (db "trend numerics ...\n")
+      ;(db "trend numerics ...\n")
       (for-each 
         (lambda (trend)
           (let* (
@@ -545,13 +589,13 @@
               [val (store-timedref store storename #f)]
               [label (store-ref store (string-append name "-value"))]
             )
-            (db (list "[" name "|" storename "|" val "]\n")) 
+            ;(db (list "[" name "|" storename "|" val "]\n")) 
             (glgui-widget-set! gui:trends label 'label (if val (number->string (fix val)) ""))
           )
         )
         trends
       )
-      (db "trend viewer ticks ...\n")
+      ;(db "trend viewer ticks ...\n")
       (let loop ((i 0) (t (- ##now trend_duration)))
         (if (fx= i num_trend_ticks) #f
           (let ([wgt (store-ref store (string-append "time-trends-" (number->string i)))])
@@ -560,11 +604,11 @@
           )
         )
       )
-      (db "clock ...\n")
+      ;(db "clock ...\n")
       (glgui-widget-set! gui:main clock 'label (seconds->string ##now "%T"))
     )
   )
-  (db "update-values : end\n")
+  ;(db "update-values : end\n")
 )
 
 ;; -----------------------------------------------------------------------------
@@ -580,12 +624,12 @@
   (db "create container widget for waves\n")
   (set! gui:waves (make-glgui))
   
-  (db "create valuelabel widgets\n")
+  (db "create label widgets\n")
   (set! icp_value 
     (glgui-valuelabel 
-      gui:waves 
-      20
-      (- (glgui-height-get) 650)
+      gui:waves                       ; container (parent)
+      20                              ; LLC x
+      (- (glgui-height-get) 650)      ; LLC y
       label_icp.img
       num_40.fnt
       Orange
@@ -593,33 +637,24 @@
   )
   
   (db "define traces\n")
-  (set! icp_trace 
+  (set! icp_trace
     (make-gltrace
-      1000 ; width
-      150  ; height
-      GLTRACE_OVERWRITE
-      0    ; min value
-      200  ; max value
-      0    ; min value (for label)
-      200  ; max value (for label)
+      1000                            ; width
+      150                             ; height
+      GLTRACE_OVERWRITE               ; mode
+      0                               ; min value
+      200                             ; max value
+      0                               ; min value (for label)
+      200                             ; max value (for label)
     )
   )
-  (db (list "icp_trace: " icp_trace "\n"))
-
   (db "clear traces\n")
-  (for-each
-    (lambda (t) 
-      (gltrace:clear t)
-    )
-    (list icp_trace)
-  )
-  (gltrace:clear icp_trace)
+  (for-each (lambda (t) (gltrace:clear t) ) (list icp_trace))
   (db (list "icp_trace: " icp_trace "\n"))
- 
-  (db "place the traces\n")
+  (db "bind traces to waveform widgets\n")
   (set! icp_wave
-    (glgui-trace
-      gui:waves
+    (glgui-trace                      
+      gui:waves                       ; container (parent)
       20                              ; LLC x
       (- (glgui-height-get) 150 650)  ; LLC y
       (- (glgui-width-get) 20 20)     ; width
@@ -650,32 +685,29 @@
 
 (define (update-waves store)
   
-  (db "*** UPDATE-WAVES : BEGIN ***\n")
-  
-  ;(db ##now) (db " - ") (db rupi:last-wave-update) (db " = ") (db (- ##now rupi:last-wave-update)) (db "\n")
-
   (if (fl> (fl- ##now rupi:last-wave-update) rupi:wave-update-frequency)
     (begin
-      (db "request new values\n")
-      (db (list icp_str " | trace: " trace "\n"))
+      (db "Resetting last wave update time\n")
+      (set! rupi:last-wave-update ##now)
+      (db "Adding data points to local store\n")
       (waveform-add 
         store
         icp_str
         icp_trace
-        rupi:wave-request-frequency
-        rupi:wave-update-frequency
+        rupi:wave-request-frequency ; "overall_time"
+        rupi:wave-update-frequency  ; "window_time"
       )
-      (db (list icp_str " | trace: " trace "\n"))
+      (db "Updating gltrace\n")
       (gltrace-update icp_trace)
-      (db (list icp_str " | trace: " trace "\n"))
-      (db "reset last-wave-update time\n")
-      (set! rupi:last-wave-update ##now)
     )
+    (db "[WAIT]\n")
   )
 
   (if (fl> (fl- ##now rupi:last-wave-request) rupi:wave-request-frequency)
     (begin
+      (db "Resetting last batch request time\n")
       (set! rupi:last-wave-request ##now)
+      (db "Requesting new batch of data from server\n")
       (let* (
           [rupi:env (if (string=? server "prod") (car rupi:envs) (cadr rupi:envs))]
           [rupi:host (car rupi:env)]
@@ -690,46 +722,111 @@
           [data (rupi-cmd rc "GETWAVES" "" subject_location)]
         )
         (if (list-notempty? data) ;; data is always a list
-          
           (let (
               [rm (caar data)]
               [ts (cdadar data)]
               [waves (cdddar data)]
             )
-            
             (waveform-add-rest store icp_str icp_trace)
-            (db "flush local stores and append the new data\n")
+            (db "Flushing local stores and appending the new data\n")
             (store-update-data data)
             (for-each
               (lambda (w)
-                (set-waveform-length store w)
+                (set-snippet-length store w)
               )
               (list icp_str)
             )
           )
-
           (begin
             (db (list "Unable to obtain waveforms from server for location: " subject_location "\n"))
           )
-        
         )
       )
     )
-    (db "[WAIT]\n")
   )
   
-  (db "*** UPDATE-WAVES : END ***\n\n")
+  (db "\n")
 
 )
 
-;; save the received waveform lengths
-(define (set-waveform-length store wave)
-  (db "\tset-waveform-length: begin\n")
+;; retrieve data for a given waveform and update trace
+(define (waveform-add store wave_name trace overall_time window_time)
+  (db "waveform-add: begin\n")
+  (let (
+      ;; get values from local store
+      [wave_val (store-ref store wave_name)]
+      ;; get wavelength from local store
+      [wave_len (store-ref store (string-append wave_name "-len") 0)]
+    )
+    (db (list "store name     : " store "\n"))
+    (db (list "wave name      : " wave_name "\n"))
+    (db (list "batch duration : " overall_time "\n"))
+    (db (list "sample interval: " window_time "\n"))
+    (db (list "wave_len       : " wave_len "\n"))
+    (db (list "list of values : " wave_val "\n"))
+    (if (list-notempty? wave_val)
+      (let (
+          ;; 
+          [num_samples (inexact->exact (floor (* (/ wave_len overall_time) window_time)))]
+        )
+        (db (list "num samples    : " num_samples "\n"))
+        (db "Adding: ")
+        (let loop ([i 0])
+          (if (and (< i num_samples) (< i (length wave_val)))
+            (begin
+              (db (list "[" i "," (list-ref wave_val i) "] "))
+              (gltrace-add trace (list-ref wave_val i))
+              (loop (+ i 1))
+            )
+          )
+        )
+        (db "\n")
+        (if (< num_samples (length wave_val))
+          (store-set! store wave_name (list-tail wave_val num_samples))
+          (store-set! store wave_name '())
+        )
+      )
+      (db "nothing to add\n")
+    )
+  )
+  (db "waveform-add: end\n")
+)
+
+;; add remaining parts of the waveform
+(define (waveform-add-rest store wave_name trace)
+  (db "waveform-add-rest: begin\n")
+  (let (
+      [data (store-ref store wave_name)]
+    )
+    (if (list-notempty? data)
+      (let (
+          [num_samples (length data)]
+        )
+        (db (list wave_name " "))
+        (db (list "num samples: " num_samples "\n"))
+        (let loop ([i 0])
+          (if (< i num_samples)
+            (begin
+              (db (list "[" i "," (list-ref data i) "] "))
+              (gltrace-add trace (list-ref data i))
+              (loop (+ i 1))
+            )
+          )
+        )
+        (db (list "\ntrace: " trace "\n"))
+      )
+      (db "nothing to add\n")
+    )
+  )
+  (db "waveform-add-rest: end\n")
+)
+
+;; save the snippet length
+(define (set-snippet-length store wave)
+  (db "set-snippet-length: begin\n")
   (let (
       [val (store-ref store wave '())]
     )
-    (db (list "\twave  : " wave "\n"))
-    (db (list "\tlength: " (length val) "\n"))
     ;; check whether they actually contain proper values; otherwise zero them
     (if (= (sum val) 0)
       (begin
@@ -740,74 +837,9 @@
         (store-set! store (string-append wave "-len") (length val))
       )
     )
+    (db (list " length of " wave ": " (length val) "\n"))
   )  
-  (db "\tset-waveform-length: end\n")
-)
-
-;; add remaining parts of the waveform
-(define (waveform-add-rest store wave_name trace)
-  (db "\twaveform-add-rest: begin\n")
-  (let (
-      [wave_val (store-ref store wave_name)]
-    )
-    (if (list-notempty? wave_val)
-      (let (
-          [num-samples (length wave_val)]
-        )
-        (db "\t") (db wave_name)
-        (let loop ([i 0])
-          (if (< i num-samples)
-            (begin
-              (db " [") (db i) (db ",") (db (list-ref wave_val i)) (db "]")
-              (gltrace-add trace (list-ref wave_val i))
-              (loop (+ i 1))
-            )
-          )
-        )
-        (db (list "\n\ttrace: " trace "\n"))
-      )
-      (db "\tnothing to add\n")
-    )
-  )
-  (db "\twaveform-add-rest: end\n")
-)
-
-;; retrieve data for a given waveform and update the trace by appending the obtained data
-(define (waveform-add store wave_name trace overall_time window_time)
-  (db "\twaveform-add: begin\n")
-  (let (
-      [wave_val (store-ref store wave_name)]
-      [wave_len (store-ref store (string-append wave_name "-len") 0)]
-    )
-    (db (list "\twave_name: " wave_name "\n"))
-    (db (list "\twave_len : " wave_len "\n"))
-    (db (list "\twave_val : " wave_val "\n"))
-    (db (list "\ttrace    : " trace "\n"))
-    (db (list "\toverall  : " overall_time "\n"))
-    (db (list "\twindow   : " window_time "\n"))
-    (if (list-notempty? wave_val)
-      (let (
-          [num_samples (inexact->exact (floor (* (/ wave_len overall_time) window_time)))]
-        )
-        (db (list "\tnum samples: " num_samples "\n"))
-        (let loop ([i 0])
-          (if (and (< i num_samples) (< i (length wave_val)))
-            (begin
-              (db " [") (db i) (db ",") (db (list-ref wave_val i)) (db "]")
-              (gltrace-add trace (list-ref wave_val i))
-              (loop (+ i 1))
-            )
-          )
-        )
-        (if (< num_samples (length wave_val))
-          (store-set! store wave_name (list-tail wave_val num_samples))
-          (store-set! store wave_name '())
-        )
-      )
-    )
-    (db "\tnothing to add\n")
-  )
-  (db "\twaveform-add: end\n")
+  (db "set-snippet-length: end\n")
 )
 
 
@@ -824,7 +856,7 @@
 
 ;; Parse a rupi-return list
 (define (store-update-data lst)
-  (db "\t\tstore-update-data: begin\n")
+  (db "store-update-data: begin\n")
   (let loop ((i 0))
     (if (< i (length lst))
       (let (
@@ -841,25 +873,25 @@
       )
     )
   )
-  (db "\t\tstore-update-data: end\n")
+  (db "store-update-data: end\n")
 )
 
 ;; Assign a returned data structure to a store
 (define (store-update-list store lst)
-  (db "\t\t\tstore-update-list: begin\n")
+  (db " store-update-list: begin\n")
   (let loop ([i 0])
     (if (< i (length lst))
       (let (
           [row (list-ref lst i)]
         )
 	      ;; CADR not CDR here; otherwise we get an extra list wrapper
-        (db (list "\t\t\t" (car row) " updated\n"))
 	      (store-set! store (car row)(cadr row))
+        (db (list "  " (car row) " updated\n"))
 	      (loop (+ i 1))
       )
     )
   )
-  (db "\t\t\tstore-update-list: end\n")
+  (db " store-update-list: end\n")
 )
 
 (define (db vars)
@@ -898,7 +930,7 @@
       ) 
       ;; (1600 x 850) works for my X1 Carbon laptop
       ;; TODO: Obtain optimal window size from system
-      (make-window (* 1600) (* 850))
+      (make-window (* screen_width) (* screen_height))
     )
     
     (glgui-orientation-set! GUI_LANDSCAPE)
