@@ -43,6 +43,7 @@
 
 (define screenshot_time #f)
 (define quit_armed? #f)
+(define case_started? #f)
 
 (define or_list (list))      ;; list of all monitoring locations
 (define subject_location #f) ;; monitoring location for current subject
@@ -377,6 +378,8 @@
       ;; Focus the text-entry label
       (glgui-widget-set! gui:main text 'focus #t)
 
+      (set! case_started? #t)
+
     )
   
   )
@@ -617,12 +620,12 @@
 
 (define (init-gui-waves)
   
-  (db "init-gui-waves: begin\n")
+  ;(db "init-gui-waves: begin\n")
 
-  (db "create container widget for waves\n")
+  ;(db "create container widget for waves\n")
   (set! gui:waves (make-glgui))
   
-  (db "create label widgets\n")
+  ;(db "create label widgets\n")
   (set! icp_value 
     (glgui-valuelabel 
       gui:waves                       ; container (parent)
@@ -634,7 +637,7 @@
     )
   )
   
-  (db "define traces\n")
+  ;(db "define traces\n")
   (set! icp_trace
     (make-gltrace
       1000                            ; width
@@ -646,10 +649,9 @@
       200                             ; max value (for label)
     )
   )
-  (db "clear traces\n")
+  ;(db "clear traces\n")
   (for-each (lambda (t) (gltrace:clear t) ) (list icp_trace))
-  (db (list "icp_trace: " icp_trace "\n"))
-  (db "bind traces to waveform widgets\n")
+  ;(db "bind traces to waveform widgets\n")
   (set! icp_wave
     (glgui-trace                      
       gui:waves                       ; container (parent)
@@ -662,8 +664,8 @@
     )
   )
 
-  (db "draw box around waveform widget\n")
-  (db "TODO - add a grid with time markers at bottom\n")
+  ;(db "draw box around waveform widget\n")
+  ;(db "TODO - add a grid with time markers at bottom\n")
   (let* (
       [x 20]
       [y (- (glgui-height-get) 650 150)]
@@ -677,17 +679,21 @@
     (glgui-box gui:waves x (+ y h) w 1 c)
   )
 
-  (db "init-gui-waves: end\n")
+  ;(db "init-gui-waves: end\n")
 
 )
 
 (define (update-waves store)
   
+
+  (let (
+      [cs? case_started?]
+    )
+
   (if (fl> (fl- ##now rupi:last-wave-update) rupi:wave-update-frequency)
     (begin
-      (db "Resetting last wave update time\n")
+      (db "Resetting last wave update time\n" cs?)
       (set! rupi:last-wave-update ##now)
-      (db "Adding data points to local store\n")
       (waveform-add 
         store
         icp_str
@@ -695,17 +701,17 @@
         rupi:wave-request-frequency ; "overall_time"
         rupi:wave-update-frequency  ; "window_time"
       )
-      (db "Updating gltrace\n")
+      (db "Updating gltrace\n" cs?)
       (gltrace-update icp_trace)
     )
-    (db "[WAIT]\n")
+    (db "[WAIT]\n" cs?)
   )
 
   (if (fl> (fl- ##now rupi:last-wave-request) rupi:wave-request-frequency)
     (begin
-      (db "Resetting last batch request time\n")
+      (db "Resetting last batch request time\n" cs?)
       (set! rupi:last-wave-request ##now)
-      (db "Requesting new batch of data from server\n")
+      (db "Requesting new batch of data from server\n" cs?)
       (let* (
           [rupi:env (if (string=? server "prod") (car rupi:envs) (cadr rupi:envs))]
           [rupi:host (car rupi:env)]
@@ -716,18 +722,20 @@
               (lambda () (car (host-info-addresses (host-info rupi:host))))
             )
           ]
-          [rc (rupi-client 0 rupi:key rupi:addr rupi:port)] ;; rupi:key is global
-          [data (rupi-cmd rc "GETWAVES" "" subject_location)]
+          [rupi_client (rupi-client 0 rupi:key rupi:addr rupi:port)] ;; rupi:key is global
+          [rupi_data (rupi-cmd rupi_client "GETWAVES" "" subject_location)]
         )
-        (if (list-notempty? data) ;; data is always a list
+        (if (list-notempty? rupi_data) ;; data is always a list
           (let (
-              [rm (caar data)]
-              [ts (cdadar data)]
-              [waves (cdddar data)]
+              [rm (caar rupi_data)]
+              [ts (cdadar rupi_data)]
+              [waves (cdddar rupi_data)]
             )
+            (db "adding remainder of batch to trace\n" cs?)
             (waveform-add-rest store icp_str icp_trace)
-            (db "Flushing local stores and appending the new data\n")
-            (store-update-data data)
+            (db "Flushing local stores and appending the new data\n" cs?)
+            (store-update-data store rupi_data)
+            (db "Saving snippet lengths\n" cs?)
             (for-each
               (lambda (w)
                 (set-snippet-length store w)
@@ -736,87 +744,92 @@
             )
           )
           (begin
-            (db (list "Unable to obtain waveforms from server for location: " subject_location "\n"))
+            (db (list "Unable to obtain waveforms from server for location: " subject_location "\n") cs?)
           )
         )
       )
     )
   )
   
-  (db "\n")
+  (db "\n" cs?)
+
+ )
 
 )
 
 ;; retrieve data for a given waveform and update trace
 (define (waveform-add store wave_name trace batch_duration sampling_interval)
-  (db "waveform-add: begin\n")
+  
   (let (
+      [cs? case_started?]
       ;; get values from local store
       [data (store-ref store wave_name)]
       ;; get wavelength from local store
       [size (store-ref store (string-append wave_name "-len") 0)]
     )
-    (db (list "wave name : " wave_name "\n"))
-    (db (list "batch size: " size "\n"))
-    (db (list "batch data: " data "\n"))
+    (db "waveform-add: begin\n" cs?)
+    (db (list "store name:" store "\nwave name : " wave_name "\nbatch data: " data "\nbatch size: " size "\n") cs?)
     (if (list-notempty? data)
       ;; number of samples to add to trace = (size of batch) * (sampling interval) / (batch duration)
       (let ([num_samples (inexact->exact (floor (/ (* sampling_interval size) batch_duration)))])
-        (db (list "# samples: " num_samples "\n"))
-        (db "adding to trace: ")
+        (db (list "# samples: " num_samples "\n") cs?)
+        (db "adding to trace: " cs?)
         (let loop ([i 0])
           (if (and (< i num_samples) (< i (length data)))
             (begin
-              (db (list "[" i "," (list-ref data i) "] "))
+              (db (list (list-ref data i) " ") cs?)
               (gltrace-add trace (list-ref data i))
               (loop (+ i 1))
             )
           )
         )
-        (db "\n")
+        (db "\n" cs?)
         (if (> (length data) num_samples)
           (begin
-            (db "removing plotted points from store\n")
+            (db "removing plotted points from store\n" cs?)
             (store-set! store wave_name (list-tail data num_samples))
           )
           (begin
-            (db "no unplotted points remaining in batch: clearing store\n")
+            (db "no unplotted points remaining in batch: clearing store\n" cs?)
             (store-set! store wave_name '())
           )
         )
       )
-      (db "no data to add to trace\n")
+      (db "no data to add to trace\n" cs?)
     )
+    (db "waveform-add: end\n" cs?)
   )
-  (db "waveform-add: end\n")
 )
 
 ;; add remaining parts of the waveform
 (define (waveform-add-rest store wave_name trace)
-  (db "waveform-add-rest: begin\n")
-  (let ([data (store-ref store wave_name)])
+  (let (
+      [cs? case_started?]
+      [data (store-ref store wave_name)]
+    )
     (if (list-notempty? data)
       (let ([num_samples (length data)])
-        (db (list wave_name " num samples: " num_samples "\n"))
+        (db (list wave_name " num samples: " num_samples "\n") cs?)
+        (db "adding to trace: " cs?)
         (let loop ([i 0])
           (if (< i num_samples)
             (begin
-              (db (list "[" i "," (list-ref data i) "] "))
+              (db (list (list-ref data i) " ") cs?)
               (gltrace-add trace (list-ref data i))
               (loop (+ i 1))
             )
           )
         )
+        (db "\n" cs?)
       )
-      (db "nothing to add\n")
+      (db "nothing to add\n" cs?)
     )
   )
-  (db "waveform-add-rest: end\n")
 )
 
 ;; save the snippet length
 (define (set-snippet-length store wave)
-  (db "set-snippet-length: begin\n")
+  ;(db "set-snippet-length: begin\n")
   (let (
       [val (store-ref store wave '())]
     )
@@ -830,9 +843,9 @@
         (store-set! store (string-append wave "-len") (length val))
       )
     )
-    (db (list " length of " wave ": " (length val) "\n"))
+    (db (list wave " size: " (length val) "\n") case_started?)
   )  
-  (db "set-snippet-length: end\n")
+  ;(db "set-snippet-length: end\n")
 )
 
 
@@ -848,50 +861,43 @@
 )
 
 ;; Parse a rupi-return list
-(define (store-update-data lst)
-  (db "store-update-data: begin\n")
+(define (store-update-data store lst)
+  
+  (db (list lst "\n"))
+
   (let loop ((i 0))
     (if (< i (length lst))
-      (let (
-          [row (list-ref lst i)]
-        )
-	      (if 
-          (and (list? row) 
-            (fx> (length row) 1) 
-            (list-notempty? (cdr row))
-          )
-          (store-update-list (car row) (cdr row))
+      (let ([row (list-ref lst i)])
+	      (if (and (list? row) (fx> (length row) 1) (list-notempty? (cdr row)))
+          (store-update-list store (cdr row))
         )
 	      (loop (+ i 1))
       )
     )
   )
-  (db "store-update-data: end\n")
 )
 
 ;; Assign a returned data structure to a store
 (define (store-update-list store lst)
-  (db " store-update-list: begin\n")
+  (db (list store "\n"))
   (let loop ([i 0])
     (if (< i (length lst))
-      (let (
-          [row (list-ref lst i)]
-        )
+      (let ([row (list-ref lst i)])
 	      ;; CADR not CDR here; otherwise we get an extra list wrapper
-	      (store-set! store (car row)(cadr row))
-        (db (list "  " (car row) " updated\n"))
+	      (store-set! store (car row) (cadr row))
+        (db (list (car row) ": " (cadr row) "\n") case_started?)
 	      (loop (+ i 1))
       )
     )
   )
-  (db " store-update-list: end\n")
 )
 
-(define (db vars)
+(define (db data . args)
   (let (
-      [lst (if (list? vars) vars (list vars))]
+      [lst (if (list? data) data (list data))]
+      [show (if (list-notempty? args) (car args) #t)]
     )
-    (if debug
+    (if (and debug show)
       (for-each
         (lambda (item) 
           (display item)
@@ -913,8 +919,6 @@
 	;; Initialize
   (lambda (w h)
    
-    (db "\nInitializing ... \n")
-    
     (if 
       (or 
         (string=? (system-platform) "macosx")
@@ -972,8 +976,6 @@
     ;; Start the scheduler
     (scheduler-init)
   
-    (db "Initializing completed\n\n")
-
   )
 
   ;; Handle events
