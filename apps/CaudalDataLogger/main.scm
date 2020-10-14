@@ -8,14 +8,12 @@
 ;; Global variables
 ;; -----------------------------------------------------------------------------
 
+(define debug #t)
+
 (define server "demo")  ;; "demo" or "prod"
 
 (define icp_str
   (if (string=? server "demo") "INVP1" "ICP")
-)
-
-(define debug
-  (if (string=? server "demo") #t #f)
 )
 
 ;; Dimensions that work with my Lenovo X1 Carbon laptop :)
@@ -750,43 +748,44 @@
 )
 
 ;; retrieve data for a given waveform and update trace
-(define (waveform-add store wave_name trace overall_time window_time)
+(define (waveform-add store wave_name trace batch_duration sampling_interval)
   (db "waveform-add: begin\n")
   (let (
       ;; get values from local store
-      [wave_val (store-ref store wave_name)]
+      [data (store-ref store wave_name)]
       ;; get wavelength from local store
-      [wave_len (store-ref store (string-append wave_name "-len") 0)]
+      [size (store-ref store (string-append wave_name "-len") 0)]
     )
-    (db (list "store name     : " store "\n"))
-    (db (list "wave name      : " wave_name "\n"))
-    (db (list "batch duration : " overall_time "\n"))
-    (db (list "sample interval: " window_time "\n"))
-    (db (list "wave_len       : " wave_len "\n"))
-    (db (list "list of values : " wave_val "\n"))
-    (if (list-notempty? wave_val)
-      (let (
-          ;; 
-          [num_samples (inexact->exact (floor (* (/ wave_len overall_time) window_time)))]
-        )
-        (db (list "num samples    : " num_samples "\n"))
-        (db "Adding: ")
+    (db (list "wave name : " wave_name "\n"))
+    (db (list "batch size: " size "\n"))
+    (db (list "batch data: " data "\n"))
+    (if (list-notempty? data)
+      ;; number of samples to add to trace = (size of batch) * (sampling interval) / (batch duration)
+      (let ([num_samples (inexact->exact (floor (/ (* sampling_interval size) batch_duration)))])
+        (db (list "# samples: " num_samples "\n"))
+        (db "adding to trace: ")
         (let loop ([i 0])
-          (if (and (< i num_samples) (< i (length wave_val)))
+          (if (and (< i num_samples) (< i (length data)))
             (begin
-              (db (list "[" i "," (list-ref wave_val i) "] "))
-              (gltrace-add trace (list-ref wave_val i))
+              (db (list "[" i "," (list-ref data i) "] "))
+              (gltrace-add trace (list-ref data i))
               (loop (+ i 1))
             )
           )
         )
         (db "\n")
-        (if (< num_samples (length wave_val))
-          (store-set! store wave_name (list-tail wave_val num_samples))
-          (store-set! store wave_name '())
+        (if (> (length data) num_samples)
+          (begin
+            (db "removing plotted points from store\n")
+            (store-set! store wave_name (list-tail data num_samples))
+          )
+          (begin
+            (db "no unplotted points remaining in batch: clearing store\n")
+            (store-set! store wave_name '())
+          )
         )
       )
-      (db "nothing to add\n")
+      (db "no data to add to trace\n")
     )
   )
   (db "waveform-add: end\n")
@@ -795,15 +794,10 @@
 ;; add remaining parts of the waveform
 (define (waveform-add-rest store wave_name trace)
   (db "waveform-add-rest: begin\n")
-  (let (
-      [data (store-ref store wave_name)]
-    )
+  (let ([data (store-ref store wave_name)])
     (if (list-notempty? data)
-      (let (
-          [num_samples (length data)]
-        )
-        (db (list wave_name " "))
-        (db (list "num samples: " num_samples "\n"))
+      (let ([num_samples (length data)])
+        (db (list wave_name " num samples: " num_samples "\n"))
         (let loop ([i 0])
           (if (< i num_samples)
             (begin
@@ -813,7 +807,6 @@
             )
           )
         )
-        (db (list "\ntrace: " trace "\n"))
       )
       (db "nothing to add\n")
     )
