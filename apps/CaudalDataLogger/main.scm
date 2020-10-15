@@ -10,10 +10,11 @@
 
 (define debug #t)
 
-(define server "demo")  ;; "demo" or "prod"
+(define server "prod")  ;; "demo" or "prod"
 
 (define icp_str
-  (if (string=? server "demo") "INVP1" "ICP")
+  ;(if (string=? server "demo") "INVP1" "ICP")
+  (if (string=? server "demo") "INVP1" "ABP")
 )
 
 ;; Dimensions that work with my Lenovo X1 Carbon laptop :)
@@ -768,7 +769,7 @@
       [size (store-ref store (string-append wave_name "-len") 0)]
     )
     (db "waveform-add: begin\n" cs?)
-    (db (list "store name:" store "\nwave name : " wave_name "\nbatch data: " data "\nbatch size: " size "\n") cs?)
+    (db (list "store name:" store "\nwave name : " wave_name "\nbatch data: " data  "\nbatch size: " size "\n") cs?)
     (if (list-notempty? data)
       ;; number of samples to add to trace = (size of batch) * (sampling interval) / (batch duration)
       (let ([num_samples (inexact->exact (floor (/ (* sampling_interval size) batch_duration)))])
@@ -862,9 +863,6 @@
 
 ;; Parse a rupi-return list
 (define (store-update-data store lst)
-  
-  (db (list lst "\n"))
-
   (let loop ((i 0))
     (if (< i (length lst))
       (let ([row (list-ref lst i)])
@@ -879,13 +877,12 @@
 
 ;; Assign a returned data structure to a store
 (define (store-update-list store lst)
-  (db (list store "\n"))
   (let loop ([i 0])
     (if (< i (length lst))
       (let ([row (list-ref lst i)])
 	      ;; CADR not CDR here; otherwise we get an extra list wrapper
 	      (store-set! store (car row) (cadr row))
-        (db (list (car row) ": " (cadr row) "\n") case_started?)
+        (db (if (string=? (car row) icp_str) (list (car row) ": " (cadr row) "\n") (list (car row) ": ...\n")) case_started?)
 	      (loop (+ i 1))
       )
     )
