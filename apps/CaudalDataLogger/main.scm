@@ -10,11 +10,11 @@
 
 (define debug #t)
 
-(define server "prod")  ;; "demo" or "prod"
+(define server "demo")  ;; "demo" or "prod"
 
 (define icp_str
   ;(if (string=? server "demo") "INVP1" "ICP")
-  (if (string=? server "demo") "INVP1" "ABP")
+  (if (string=? server "demo") "INVP1" "ICP")
 )
 
 ;; Dimensions that work with my Lenovo X1 Carbon laptop :)
@@ -623,10 +623,10 @@
   
   ;(db "init-gui-waves: begin\n")
 
-  ;(db "create container widget for waves\n")
+  ;(db "create container widget for wave\n")
   (set! gui:waves (make-glgui))
   
-  ;(db "create label widgets\n")
+  ;(db "create label widget\n")
   (set! icp_value 
     (glgui-valuelabel 
       gui:waves                       ; container (parent)
@@ -638,7 +638,7 @@
     )
   )
   
-  ;(db "define traces\n")
+  ;(db "define trace\n")
   (set! icp_trace
     (make-gltrace
       1000                            ; width
@@ -650,8 +650,8 @@
       200                             ; max value (for label)
     )
   )
-  ;(db "clear traces\n")
-  (for-each (lambda (t) (gltrace:clear t) ) (list icp_trace))
+  ;(db "clear trace\n")
+  (gltrace:clear icp_trace)
   ;(db "bind traces to waveform widgets\n")
   (set! icp_wave
     (glgui-trace                      
@@ -727,22 +727,13 @@
           [rupi_data (rupi-cmd rupi_client "GETWAVES" "" subject_location)]
         )
         (if (list-notempty? rupi_data) ;; data is always a list
-          (let (
-              [rm (caar rupi_data)]
-              [ts (cdadar rupi_data)]
-              [waves (cdddar rupi_data)]
-            )
-            (db "adding remainder of batch to trace\n" cs?)
+          (begin
+            (db "Adding remainder of old batch to trace\n" cs?)
             (waveform-add-rest store icp_str icp_trace)
-            (db "Flushing local stores and appending the new data\n" cs?)
+            (db "Flushing local stores and appending new batch\n" cs?)
             (store-update-data store rupi_data)
-            (db "Saving snippet lengths\n" cs?)
-            (for-each
-              (lambda (w)
-                (set-snippet-length store w)
-              )
-              (list icp_str)
-            )
+            (db "Saving new batch length\n" cs?)
+            (set-batch-length store icp_str)
           )
           (begin
             (db (list "Unable to obtain waveforms from server for location: " subject_location "\n") cs?)
@@ -828,25 +819,25 @@
   )
 )
 
-;; save the snippet length
-(define (set-snippet-length store wave)
-  ;(db "set-snippet-length: begin\n")
+;; save the batch length
+(define (set-batch-length store wave)
+  ;(db "set-batch-length: begin\n")
   (let (
-      [val (store-ref store wave '())]
+      [data (store-ref store wave '())]
     )
     ;; check whether they actually contain proper values; otherwise zero them
-    (if (= (sum val) 0)
+    (if (= (sum data) 0)
       (begin
         (store-set! store (string-append wave "-len") 0)
         (store-set! store wave '())
       )
       (begin
-        (store-set! store (string-append wave "-len") (length val))
+        (store-set! store (string-append wave "-len") (length data))
       )
     )
-    (db (list wave " size: " (length val) "\n") case_started?)
+    (db (list wave " size: " (length data) "\n") case_started?)
   )  
-  ;(db "set-snippet-length: end\n")
+  ;(db "set-batch-length: end\n")
 )
 
 
@@ -861,11 +852,12 @@
   (and (list? lst) (not (null? lst)))
 )
 
-;; Parse a rupi-return list
-(define (store-update-data store lst)
+;; Parse a rupi-return list:
+;; ((OR1 (waveform-timestamp value) (Wave1 (...)) (Wave2 (...))) (OR2 (waveform-timestamp value) (Wave1 (...)) (Wave1 (...))))
+(define (store-update-data store rupi_data)
   (let loop ((i 0))
-    (if (< i (length lst))
-      (let ([row (list-ref lst i)])
+    (if (< i (length rupi_data))
+      (let ([row (list-ref rupi_data i)])
 	      (if (and (list? row) (fx> (length row) 1) (list-notempty? (cdr row)))
           (store-update-list store (cdr row))
         )
@@ -875,14 +867,15 @@
   )
 )
 
-;; Assign a returned data structure to a store
-(define (store-update-list store lst)
+;; Assign a wave to a store
+(define (store-update-list store data)
   (let loop ([i 0])
-    (if (< i (length lst))
-      (let ([row (list-ref lst i)])
-	      ;; CADR not CDR here; otherwise we get an extra list wrapper
+    (if (< i (length data))
+      (let ([row (list-ref data i)])
 	      (store-set! store (car row) (cadr row))
-        (db (if (string=? (car row) icp_str) (list (car row) ": " (cadr row) "\n") (list (car row) ": ...\n")) case_started?)
+        (if (string=? (car row) icp_str) 
+          (db (list (car row) ": " (cadr row) "\n") case_started?)
+        )
 	      (loop (+ i 1))
       )
     )
