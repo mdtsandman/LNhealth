@@ -767,6 +767,7 @@
           )
           (db "rupi: Empty batch returned from server\n")
         )
+        (gltrace-update icp_trace)
         (set! rupi:last-wave-request ##now)
       )
       (db "WAIT\n")
