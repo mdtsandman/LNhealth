@@ -473,7 +473,7 @@
 )
 
 (define (init-gui-trends)
-  
+
   (set! gui:trends (make-glgui))
 
   ;; Create trend numbers and waveforms
@@ -598,7 +598,10 @@
         trends
       )
       ;(db "trend viewer ticks ...\n")
-      (let loop ((i 0) (t (- ##now trend_duration)))
+      (let loop (
+          [i 0]
+          [t (- ##now trend_duration)]
+        )
         (if (fx= i num_trend_ticks) #f
           (let ([wgt (store-ref store (string-append "time-trends-" (number->string i)))])
             (glgui-widget-set! gui:main wgt 'label (seconds->string t "%H:%M"))
@@ -621,7 +624,7 @@
 
 (define (init-gui-waves)
   
-  ;(db "init-gui-waves: begin\n")
+  (db "init-gui-waves: begin\n")
 
   ;(db "create container widget for wave\n")
   (set! gui:waves (make-glgui))
@@ -680,39 +683,24 @@
     (glgui-box gui:waves x (+ y h) w 1 c)
   )
 
-  ;(db "init-gui-waves: end\n")
+  (db "init-gui-waves: end\n")
 
 )
 
-(define (update-waves store)
-  
 
-  (let (
-      [cs? case_started?]
-    )
-
-  (if (fl> (fl- ##now rupi:last-wave-update) rupi:wave-update-frequency)
-    (begin
-      (db "Resetting last wave update time\n" cs?)
-      (set! rupi:last-wave-update ##now)
-      (waveform-add 
-        store
-        icp_str
-        icp_trace
-        rupi:wave-request-frequency ; "overall_time"
-        rupi:wave-update-frequency  ; "window_time"
-      )
-      (db "Updating gltrace\n" cs?)
-      (gltrace-update icp_trace)
-    )
-    (db "[WAIT]\n" cs?)
-  )
-
-  (if (fl> (fl- ##now rupi:last-wave-request) rupi:wave-request-frequency)
-    (begin
-      (db "Resetting last batch request time\n" cs?)
-      (set! rupi:last-wave-request ##now)
-      (db "Requesting new batch of data from server\n" cs?)
+;; rupi return list format:
+;; (
+;;   (OR1 
+;;     (waveform-timestamp value) (Wave1 (...)) (Wave2 (...) etc )
+;;   ) 
+;;   (OR2 
+;;     (waveform-timestamp value) (Wave1 (...)) (Wave1 (...) etc )
+;;   )
+;;   ( etc )
+;; )
+(define (update-wave store room_name wave_name)
+  (let ([cs? case_started?])
+    (if (fl> (fl- ##now rupi:last-wave-request) rupi:wave-request-frequency)
       (let* (
           [rupi:env (if (string=? server "prod") (car rupi:envs) (cadr rupi:envs))]
           [rupi:host (car rupi:env)]
@@ -726,121 +714,65 @@
           [rupi_client (rupi-client 0 rupi:key rupi:addr rupi:port)] ;; rupi:key is global
           [rupi_data (rupi-cmd rupi_client "GETWAVES" "" subject_location)]
         )
-        (if (list-notempty? rupi_data) ;; data is always a list
+        (if (list-notempty? rupi_data)
           (begin
-            (db "Adding remainder of old batch to trace\n" cs?)
-            (waveform-add-rest store icp_str icp_trace)
-            (db "Flushing local stores and appending new batch\n" cs?)
-            (store-update-data store rupi_data)
-            (db "Saving new batch length\n" cs?)
-            (set-batch-length store icp_str)
-          )
-          (begin
-            (db (list "Unable to obtain waveforms from server for location: " subject_location "\n") cs?)
-          )
-        )
-      )
-    )
-  )
-  
-  (db "\n" cs?)
-
- )
-
-)
-
-;; retrieve data for a given waveform and update trace
-(define (waveform-add store wave_name trace batch_duration sampling_interval)
-  
-  (let (
-      [cs? case_started?]
-      ;; get values from local store
-      [data (store-ref store wave_name)]
-      ;; get wavelength from local store
-      [size (store-ref store (string-append wave_name "-len") 0)]
-    )
-    (db "waveform-add: begin\n" cs?)
-    (db (list "store name:" store "\nwave name : " wave_name "\nbatch data: " data  "\nbatch size: " size "\n") cs?)
-    (if (list-notempty? data)
-      ;; number of samples to add to trace = (size of batch) * (sampling interval) / (batch duration)
-      (let ([num_samples (inexact->exact (floor (/ (* sampling_interval size) batch_duration)))])
-        (db (list "# samples: " num_samples "\n") cs?)
-        (db "adding to trace: " cs?)
-        (let loop ([i 0])
-          (if (and (< i num_samples) (< i (length data)))
-            (begin
-              (db (list (list-ref data i) " ") cs?)
-              (gltrace-add trace (list-ref data i))
-              (loop (+ i 1))
+            (let room-loop ([i 0])
+              (let (
+                  [num_rooms (length rupi_data)]
+                  [room (list-ref rupi_data i)]
+                )
+                (if (< i num_rooms)
+                  (let (
+                      [name (car room)]
+                      [ts (cadadr room)]
+                      [waves (cddr room)]
+                    )
+                    (if (string=? name room_name)
+                      (begin
+                        (db (list "Adding " wave_name " data for " room_name " at " ts "\n"))
+                        (let wave-loop ([j 0])
+                          (let (
+                              [num_waves (length waves)]
+                              [wave (list-ref waves j)]
+                            )
+                            (if (< j num_waves)
+                            (begin
+                              (if (string=? (car wave) wave_name)
+                                (begin
+                                  ;(store-set! store wave data) ; write full batch to store
+                                  (let data-loop ([k 0])
+                                    (if (< k (length (cadr wave)))
+                                      (begin
+                                        (db (list "[" k "/" (length (cadr wave)) "] = " (list-ref (cadr wave) k) " "))
+                                        (gltrace-add icp_trace (list-ref (cadr wave) k)) ; add value to trace
+                                        (data-loop (+ k 1))
+                                      )
+                                      (db "\n")
+                                    )
+                                  )
+                                )
+                                (wave-loop (+ j 1))
+                              )
+                            )
+                            )
+                          )
+                        )
+                      )
+                      (room-loop (+ i 1))
+                    )
+                  )
+                )
+              )
             )
           )
+          (db "rupi: Empty batch returned from server\n")
         )
-        (db "\n" cs?)
-        (if (> (length data) num_samples)
-          (begin
-            (db "removing plotted points from store\n" cs?)
-            (store-set! store wave_name (list-tail data num_samples))
-          )
-          (begin
-            (db "no unplotted points remaining in batch: clearing store\n" cs?)
-            (store-set! store wave_name '())
-          )
-        )
+        (set! rupi:last-wave-request ##now)
       )
-      (db "no data to add to trace\n" cs?)
-    )
-    (db "waveform-add: end\n" cs?)
-  )
-)
-
-;; add remaining parts of the waveform
-(define (waveform-add-rest store wave_name trace)
-  (let (
-      [cs? case_started?]
-      [data (store-ref store wave_name)]
-    )
-    (if (list-notempty? data)
-      (let ([num_samples (length data)])
-        (db (list wave_name " num samples: " num_samples "\n") cs?)
-        (db "adding to trace: " cs?)
-        (let loop ([i 0])
-          (if (< i num_samples)
-            (begin
-              (db (list (list-ref data i) " ") cs?)
-              (gltrace-add trace (list-ref data i))
-              (loop (+ i 1))
-            )
-          )
-        )
-        (db "\n" cs?)
-      )
-      (db "nothing to add\n" cs?)
+      (db "WAIT\n")
     )
   )
 )
-
-;; save the batch length
-(define (set-batch-length store wave)
-  ;(db "set-batch-length: begin\n")
-  (let (
-      [data (store-ref store wave '())]
-    )
-    ;; check whether they actually contain proper values; otherwise zero them
-    (if (= (sum data) 0)
-      (begin
-        (store-set! store (string-append wave "-len") 0)
-        (store-set! store wave '())
-      )
-      (begin
-        (store-set! store (string-append wave "-len") (length data))
-      )
-    )
-    (db (list wave " size: " (length data) "\n") case_started?)
-  )  
-  ;(db "set-batch-length: end\n")
-)
-
-
 
 
 ;; -----------------------------------------------------------------------------
@@ -850,36 +782,6 @@
 ;; Check for empty lists
 (define (list-notempty? lst)
   (and (list? lst) (not (null? lst)))
-)
-
-;; Parse a rupi-return list:
-;; ((OR1 (waveform-timestamp value) (Wave1 (...)) (Wave2 (...))) (OR2 (waveform-timestamp value) (Wave1 (...)) (Wave1 (...))))
-(define (store-update-data store rupi_data)
-  (let loop ((i 0))
-    (if (< i (length rupi_data))
-      (let ([row (list-ref rupi_data i)])
-	      (if (and (list? row) (fx> (length row) 1) (list-notempty? (cdr row)))
-          (store-update-list store (cdr row))
-        )
-	      (loop (+ i 1))
-      )
-    )
-  )
-)
-
-;; Assign a wave to a store
-(define (store-update-list store data)
-  (let loop ([i 0])
-    (if (< i (length data))
-      (let ([row (list-ref data i)])
-	      (store-set! store (car row) (cadr row))
-        (if (string=? (car row) icp_str) 
-          (db (list (car row) ": " (cadr row) "\n") case_started?)
-        )
-	      (loop (+ i 1))
-      )
-    )
-  )
 )
 
 (define (db data . args)
@@ -897,8 +799,6 @@
     )
   )
 )
-
-
 
 
 ;; -----------------------------------------------------------------------------
@@ -970,10 +870,11 @@
 
   ;; Handle events
   (lambda (t x y)
-    
+
     (update-trends "main")
-    (update-waves  "main")
     (update-values "main")
+
+    (update-wave "main" subject_location icp_str)
     
     (if (= t EVENT_KEYPRESS)
       (if (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
