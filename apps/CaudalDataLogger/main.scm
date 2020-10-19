@@ -720,32 +720,28 @@
               )
               (db (list room "\n"))
               (if (< i num_rooms)
-                (let (
+                (let* (
                     [name (car room)]
                     [ts (cadadr room)]
                     [waves (cddr room)]
+                    [num_waves (length waves)]
                   )
                   (if (string=? name room_name)
                     (let wave-loop ([j 0])
-                    (db (list "j=" j "\n"))
-                      (let (
-                          [num_waves (length waves)]
-                          [wave (list-ref waves j)]
-                        )
-                        (if (< j num_waves)
+                      (if (< j num_waves)
+                        (let ([wave (list-ref waves j)])
+                          (db (list "j=" j "\n"))
                           (if (string=? (car wave) wave_name)
                             (begin
                               (db "Clearing store\n")
                               (store-clear! store wave_name)
                               (db "Writing batch to store\n")
                               (store-set! store wave_name (cadr wave))
-                              (db (cdr wave) cs?) (db "\n" cs?)
-                              ;(db (store-ref store wave_name) cs?)
                               (let data-loop ([k 0])
                                 (if (< k (length (cadr wave)))
                                   (let ([value (list-ref (cadr wave) k)])
                                     (gltrace-add icp_trace value)
-                                    ;(db (list "[" value "] ") cs?)
+                                    (db (list "[" value "] ") cs?)
                                     (data-loop (+ k 1))
                                   )
                                   (db "\n\n" cs?)
