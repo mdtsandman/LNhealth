@@ -10,11 +10,11 @@
 
 (define debug #t)
 
-(define server "demo")  ;; "demo" or "prod"
+(define server "prod")  ;; "demo" or "prod"
 
 (define icp_str
   ;(if (string=? server "demo") "INVP1" "ICP")
-  (if (string=? server "demo") "INVP1" "ICP")
+  (if (string=? server "demo") "INVP1" "ART")
 )
 
 ;; Dimensions that work with my Lenovo X1 Carbon laptop :)
@@ -713,12 +713,10 @@
         )
         (if (list-notempty? rupi_data)
           (let room-loop ([i 0])
-            (db (list "\ni=" i "\n"))
             (let (
                 [num_rooms (length rupi_data)]
                 [room (list-ref rupi_data i)]
               )
-              (db (list room "\n"))
               (if (< i num_rooms)
                 (let* (
                     [name (car room)]
@@ -730,21 +728,17 @@
                     (let wave-loop ([j 0])
                       (if (< j num_waves)
                         (let ([wave (list-ref waves j)])
-                          (db (list "j=" j "\n"))
                           (if (string=? (car wave) wave_name)
                             (begin
-                              (db "Clearing store\n")
                               (store-clear! store wave_name)
-                              (db "Writing batch to store\n")
                               (store-set! store wave_name (cadr wave))
                               (let data-loop ([k 0])
                                 (if (< k (length (cadr wave)))
                                   (let ([value (list-ref (cadr wave) k)])
                                     (gltrace-add icp_trace value)
-                                    (db (list "[" value "] ") cs?)
+                                    ;(db (list "[" value "] ") cs?)
                                     (data-loop (+ k 1))
                                   )
-                                  (db "\n\n" cs?)
                                 )
                               )
                             )
@@ -764,7 +758,7 @@
         (gltrace-update icp_trace)
         (set! rupi:last-wave-request ##now)
       )
-      (db "WAIT " cs?)
+      ;(db "WAIT " cs?)
     )
   )
 )
@@ -795,6 +789,12 @@
   )
 )
 
+(define (dbln data . args)
+  (if (list? data)
+    (db (append "\n" data) args)
+    (db (list data "\n") args)
+  )
+)
 
 ;; -----------------------------------------------------------------------------
 ;;  MAIN PROGRAM
@@ -874,19 +874,19 @@
     (if (= t EVENT_KEYPRESS)
       (if (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
         (cond 
-          [(and (= x EVENT_KEYESCAPE) quit-armed?)
+          [(and (= x EVENT_KEYESCAPE) quit_armed?)
             (terminate) ;; ESC (x2 consecutive) terminates program
           ]
           [(= x EVENT_KEYESCAPE)
             (begin
-              (set! quit-armed? #t) ;; ESC (x1) arms quit
+              (set! quit_armed? #t) ;; ESC (x1) arms quit
               (store-event-add store 1 "Press ESC again to quit!")
     		      (glgui-widget-set! gui:main log-list 'list (build-log-list))
           )
           ]
-          [quit-armed?
+          [quit_armed?
             (begin
-              (set! quit-armed? #f) ;; Any key other than ESC disarms quit.
+              (set! quit_armed? #f) ;; Any key other than ESC disarms quit.
               (store-event-add store 1 "Quit sequence aborted")
   		        (glgui-widget-set! gui:main log-list 'list (build-log-list))
             )
