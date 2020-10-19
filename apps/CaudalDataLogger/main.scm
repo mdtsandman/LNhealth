@@ -328,40 +328,37 @@
         )
       )
       
-      ;; Record ivue waveforms
-      (let ([waves (append ivue:waveform_basic ivue:waveforms_aisys)])
-        (for-each 
-          (lambda (l)
-            (make-instance                    
-              "main"                          ;; store name  
-              (string-append "WAVEOUT" l)     ;; name of plugin instance
-              "waveoutput"                    ;; plugin name
-              `("Source" ,l)                  ;; configuration options to be passed to plugin
-            )
-          ) 
-          waves
-        )
-      )
- 
-      ;; For demo server, need to use s5 labels for waveforms
       (if (string=? server "demo")
-        (begin
-          (let ([waves (list icp_str)])
-            (for-each 
-              (lambda (l) 
-                (make-instance
-                  "main"                          ;; store name
-                  (string-append "WAVEOUT" l)     ;; name of plugin instance
-                  "waveoutput"                    ;; plugin name
-                  `("Source" ,l)                  ;; configuration options to be passed to plugin
-                )
-              ) 
-              waves
-            )
+        ;; For demo server, need to use s5 labels for waveforms
+        (let ([waves (list icp_str)])
+          (for-each 
+            (lambda (l) 
+              (make-instance
+                "main"                          ;; store name
+                (string-append "WAVEOUT" l)     ;; name of plugin instance
+                "waveoutput"                    ;; plugin name
+                `("Source" ,l)                  ;; configuration options to be passed to plugin
+              )
+            ) 
+            waves
           )
         )
-      )
-
+        ;; Otherwise, record ivue waveforms
+        (let ([waves (append ivue:waveform_basic ivue:waveforms_aisys)])
+          (for-each 
+            (lambda (l)
+              (make-instance                    
+                "main"                          ;; store name  
+                (string-append "WAVEOUT" l)     ;; name of plugin instance
+                "waveoutput"                    ;; plugin name
+                `("Source" ,l)                  ;; configuration options to be passed to plugin
+              )
+           ) 
+            waves
+          )
+        )
+      )  
+            
       ;; Start the scheduler
       (scheduler-startcase store
         (string-append "BCCH-" (number->string subject-num) "_" (time->timestamp (current-time))))
@@ -715,62 +712,63 @@
           [rupi_data (rupi-cmd rupi_client "GETWAVES" "" subject_location)]
         )
         (if (list-notempty? rupi_data)
-          (begin
-            (let room-loop ([i 0])
-              (let (
-                  [num_rooms (length rupi_data)]
-                  [room (list-ref rupi_data i)]
-                )
-                (if (< i num_rooms)
-                  (let (
-                      [name (car room)]
-                      [ts (cadadr room)]
-                      [waves (cddr room)]
-                    )
-                    (if (string=? name room_name)
-                      (begin
-                        (db (list "Adding " wave_name " data for " room_name " at " ts "\n"))
-                        (let wave-loop ([j 0])
-                          (let (
-                              [num_waves (length waves)]
-                              [wave (list-ref waves j)]
-                            )
-                            (if (< j num_waves)
+          (let room-loop ([i 0])
+            (db (list "\ni=" i "\n"))
+            (let (
+                [num_rooms (length rupi_data)]
+                [room (list-ref rupi_data i)]
+              )
+              (db (list room "\n"))
+              (if (< i num_rooms)
+                (let (
+                    [name (car room)]
+                    [ts (cadadr room)]
+                    [waves (cddr room)]
+                  )
+                  (if (string=? name room_name)
+                    (let wave-loop ([j 0])
+                    (db (list "j=" j "\n"))
+                      (let (
+                          [num_waves (length waves)]
+                          [wave (list-ref waves j)]
+                        )
+                        (if (< j num_waves)
+                          (if (string=? (car wave) wave_name)
                             (begin
-                              (if (string=? (car wave) wave_name)
-                                (begin
-                                  ;(store-set! store wave data) ; write full batch to store
-                                  (let data-loop ([k 0])
-                                    (if (< k (length (cadr wave)))
-                                      (begin
-                                        (db (list "[" k "/" (length (cadr wave)) "] = " (list-ref (cadr wave) k) " "))
-                                        (gltrace-add icp_trace (list-ref (cadr wave) k)) ; add value to trace
-                                        (data-loop (+ k 1))
-                                      )
-                                      (db "\n")
-                                    )
+                              (db "Clearing store\n")
+                              (store-clear! store wave_name)
+                              (db "Writing batch to store\n")
+                              (store-set! store wave_name (cadr wave))
+                              (db (cdr wave) cs?) (db "\n" cs?)
+                              ;(db (store-ref store wave_name) cs?)
+                              (let data-loop ([k 0])
+                                (if (< k (length (cadr wave)))
+                                  (let ([value (list-ref (cadr wave) k)])
+                                    (gltrace-add icp_trace value)
+                                    ;(db (list "[" value "] ") cs?)
+                                    (data-loop (+ k 1))
                                   )
+                                  (db "\n\n" cs?)
                                 )
-                                (wave-loop (+ j 1))
                               )
                             )
-                            )
+                            (wave-loop (+ j 1))
                           )
                         )
                       )
-                      (room-loop (+ i 1))
                     )
+                    (room-loop (+ i 1))
                   )
                 )
               )
             )
           )
-          (db "rupi: Empty batch returned from server\n")
+          (db "RUPI: Empty batch returned from server\n" cs?)
         )
         (gltrace-update icp_trace)
         (set! rupi:last-wave-request ##now)
       )
-      (db "WAIT\n")
+      (db "WAIT " cs?)
     )
   )
 )
