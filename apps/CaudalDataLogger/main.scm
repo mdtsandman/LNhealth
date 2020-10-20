@@ -14,7 +14,7 @@
 
 (define icp_str
   ;(if (string=? server "demo") "INVP1" "ICP")
-  (if (string=? server "demo") "INVP1" "ART")
+  (if (string=? server "demo") "INVP1" "ABP")
 )
 
 ;; Dimensions that work with my Lenovo X1 Carbon laptop :)
@@ -621,8 +621,6 @@
 
 (define (init-gui-waves)
   
-  (db "init-gui-waves: begin\n")
-
   ;(db "create container widget for wave\n")
   (set! gui:waves (make-glgui))
   
@@ -680,8 +678,6 @@
     (glgui-box gui:waves x (+ y h) w 1 c)
   )
 
-  (db "init-gui-waves: end\n")
-
 )
 
 
@@ -729,14 +725,14 @@
                       (if (< j num_waves)
                         (let ([wave (list-ref waves j)])
                           (if (string=? (car wave) wave_name)
-                            (begin
+                            (let ([wave_data (cadr wave)])
+                              (dbln (length wave_data))
                               (store-clear! store wave_name)
-                              (store-set! store wave_name (cadr wave))
+                              (store-set! store wave_name wave_data)
                               (let data-loop ([k 0])
-                                (if (< k (length (cadr wave)))
-                                  (let ([value (list-ref (cadr wave) k)])
+                                (if (< k (length wave_data))
+                                  (let ([value (list-ref wave_data k)])
                                     (gltrace-add icp_trace value)
-                                    ;(db (list "[" value "] ") cs?)
                                     (data-loop (+ k 1))
                                   )
                                 )
@@ -791,7 +787,7 @@
 
 (define (dbln data . args)
   (if (list? data)
-    (db (append "\n" data) args)
+    (db (append data "\n") args)
     (db (list data "\n") args)
   )
 )
