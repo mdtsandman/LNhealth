@@ -44,7 +44,7 @@
   (list (list "Surgery paused:" #f) "Surgery resumed" (list "HFJV paused:" #f) "HFJV resumed")
 )
 (define markers_vent
-  (list (list "PIP" #f) (list "PEEP") (list "RR" #f) (list "Ti" #f) (list "FiO2" #f))
+  (list (list "PIP" #f) (list "PEEP" #f) (list "RR" #f) (list "Ti" #f) (list "FiO2" #f))
 )
 
 ;; -----------------------------------------------------------------------------
@@ -116,7 +116,7 @@
   ;; LifePulse settings buttons
   (let (
       [n (length markers_vent)]
-      [w 180]
+      [w 120]
       [x (- (glgui-width-get) 180 20)]
       [y (- (glgui-height-get) 85 (* 35 (length markers_timeline)) 15 (* 35 (length markers_events)) 15)]
     )
@@ -124,15 +124,11 @@
       (if (< i n)
         (let ([marker (list-ref markers_vent i)])
           (if marker
-            (let ([cl (list? marker)])
-              (let (
-                  [str (if cl (car marker) marker)]
-                  [cb (if cl marker-freetext-callback marker-callback)]
-                )
-                (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt cb))
-                (glgui-widget-set! gui:main bs 'value -1)
-                (if cl (glgui-widget-set! gui:main bs 'color CornflowerBlue))
-              )
+            (let ([str (car marker)])
+              (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt hfjv-settings-callback))
+              (set! label (glgui-label gui:main (+ x w 15) (- y (* 35 i)) 100 30 "" ascii_24.fnt White))
+              (glgui-widget-set! gui:main bs 'value -1)
+              (glgui-widget-set! gui:main bs 'color Green)
             )
           )
           (loop (+ i 1))
@@ -193,10 +189,7 @@
 (define (build-log-list)
   (let ([logs (store-event-listnew store)])
     (if logs
-      (let loop (
-          [i 0]
-          [result (list)]
-        )
+      (let loop ([i 0] [result (list)])
         (if (= i (length logs)) result
           (loop (+ i 1) (append result (list (log-list-element (list-ref logs i)))))
         )
@@ -245,7 +238,7 @@
       (set! setup_id (glgui-inputlabel gui:setup (+ 20 100) (- h 55 (* 30 0) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
       (glgui-widget-set! gui:setup setup_id 'align GUI_ALIGNRIGHT)
       (glgui-widget-set! gui:setup setup_id 'focus #t)
-  
+
       ;; age
       (set! age_label (glgui-label gui:setup 20 (- h 55 (* 30 2)) 100 30 "Age: " ascii_24.fnt White))
       (glgui-widget-set! gui:setup age_label 'align GUI_ALIGNRIGHT)
@@ -260,7 +253,7 @@
       ;; location list
       (set! location-label (glgui-label gui:setup 20 (- h 55 (* 30 4) 5) 100 30 "Location: " ascii_24.fnt White))
       (glgui-widget-set! gui:setup location-label 'align GUI_ALIGNRIGHT)
-      (set! location-dropdown 
+      (set! location_dropdown 
         (glgui-dropdownbox 
           gui:setup 
           (+ 20 100) 
@@ -281,17 +274,32 @@
           Blue
         )
       )
-      (glgui-widget-set! gui:setup location-dropdown 'callback location-callback)
+      (glgui-widget-set! gui:setup location_dropdown 'callback location-callback)
 
       ;; start button
       (set! start_btn (glgui-button-string gui:setup (- (/ w 2) (/ 180 2)) 20 180 40 "Start Recording" ascii_24.fnt start-callback))
       (glgui-widget-set! gui:setup start_btn 'align GUI_ALIGNCENTER)
-   
+      
     )
   )
   ;(dbln "init-gui-setup: end")
 )
 
+;; (hfjv-settings-callback g w t x y)
+;; (list "PIPhfjv" "Tihfjv" "RRhfjv" "FiO2hfjv")
+(define (hfjv-settings-callback g w t x y)
+  (set! pip  (string->number (glgui-widget-get gui:setup hfjv_pip  'label)))
+  (set! fio2 (string->number (glgui-widget-get gui:setup hfjv_fio2 'label)))
+  (set! rate (string->number (glgui-widget-get gui:setup hfjv_rate 'label)))
+  (set! ti   (string->number (glgui-widget-get gui:setup hfjv_ti   'label)))
+  (let* (
+      [idx (glgui-widget-get g w 'value)] 
+      [buf (glgui-widget-get gui:main text 'label)]
+    )    
+    (set! buf (string-append marker " "))
+    (glgui-widget-set! g text 'label buf)
+  )
+)
 
 ;; (location-callback g w t x y)
 ;;
@@ -348,6 +356,7 @@
               ivue:physdatavalues_aisys 
               ivue:physdatavalues_nirs
               ivue:physdatavalues_tcco2
+              (list "PIPhfjv" "Tihfjv" "RRhfjv" "FiO2hfjv")
             )
           )
         )
@@ -395,12 +404,14 @@
 ;; -----------------------------------------------------------------------------
 ;; TRENDS
 ;; -----------------------------------------------------------------------------
+
 (define gui:trends #f)
 ;; vmin & vmax: define the scale for each waveform
 ;; label.img:   must correspond to an item in the file STRINGS
 ;; yoffset:     vertical offset of the numeric where 1.0 represents the width of one trend band?
 ;; traceh:      width of the trend band, in pixels?
 ;; traceoffset: ordinal vertical offset of the trace band to use for the waveform?
+
 (define trends 
   (list
 ;;        name        vmin  vmax  color       label.img           storename   yoffset  trace-h  traceoffset
@@ -419,31 +430,41 @@
   )
 )
 
+(define hfjv_settings 
+  (list
+;;        name        color   label.img           storename   yoffset  
+    (list "rr_hfjv"   White   label_hr.img        "HR"        1)
+    (list "ti_hfjv"   White   label_spo2.img      "SpO2"      3)
+    (list "pip_hfjv"  White   label_pulse.img     "PRSpO2"    1.3)
+    (list "fio2_hfjv" White   label_map_nibp.img  "NBPmean"   2.3)
+  )
+)
+
+
 (define (make-trends g x y0 s vars)
   ;(dbln "make-trends: begin")
   (let* ([w trend_len] [h 100] [y (- y0 h)] [ws trend_len] [min_y 0])
     (glgui-box g (+ x 20) (- (glgui-height-get) 50) (+ w 40) 1 DimGray) ; HLine above top trend widget
     (for-each 
       (lambda (v)
-        ;; show graphical trend using a glgui-trace-slider widget
+        ;; graphical trend
         (let* (
             [name (car v)] [vmin (cadr v)] [vmax (caddr v)] [color (cadddr v)] [trace-h (list-ref v 7)]
             [traceoffset (list-ref v 8)] [trace (string-append name "-trace")] [wave (string-append name "-wave")]
           )
-          ;(let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
-          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT 0 vmax 0 vmax)])
+          (let ([trc (make-gltrace ws trace-h GLTRACE_SHIFT vmin vmax vmin vmax)])
             (store-set! s trace trc)
             (gltrace:clear trc)
             (glgui-box g (+ x 20) (- (glgui-height-get) 50 (* trend_row_height traceoffset)) (+ w 40) 1 DimGray) ; HLine below each trend widget
             (store-set! 
-              s 
-              wave 
+              s
+              wave
               (glgui-trace-slider g (+ x 20) (- (glgui-height-get) 50 (* 90 traceoffset)) (+ w 40) 90 trc color ascii_16.fnt)
             )
           )
           (set! min_y (- (glgui-height-get) 50 (* 90 traceoffset)))
         )
-        ;; Show numeric beside the trend widget using a glgui-valuelabel widget
+        ;; label for numeric
         (let ([value (string-append (car v) "-value")] [color (cadddr v)] [lbl (list-ref v 4)] [yoffset (list-ref v 6)])
           (store-set! s value (glgui-valuelabel g (+ x w 175) (- (glgui-height-get) (* 90 yoffset)) lbl num_40.fnt color))
         )
@@ -458,7 +479,11 @@
 (define (init-gui-trends)
   ;(dbln "init-gui-trends: begin")
   (set! gui:trends (make-glgui))
+  ;iVue trends
   (set! gui:trends-h (make-trends gui:trends 0 (- (glgui-height-get) 50) store trends))
+  ;HFJV settings
+  (make-hfjv-settings-trends gui:main store trends)
+  ;Event markers
   (let ( 
       [trace
         (make-gltrace   ;; This is the trace itself
@@ -486,10 +511,9 @@
         trace                                  ;; Data to be traced
         Yellow                                 ;; Color
       )
-    )
-  
+    )  
   )
-  ;(dbln "Add a grid with time markers at bottom")
+  ;(dbln "Grid with time markers")
   (let* (
       [y (- (glgui-height-get) 50 (* trend_row_height num_trend_rows))]
       [h (* trend_row_height num_trend_rows)]
@@ -517,8 +541,11 @@
 (define last_trend_update 0)
 
 (define (update-trends store)
+  
   ;(dbln "update-trends : begin")
+  
   (if (> (- ##now last_trend_update) trend_update_interval)
+    
     (begin
       ;; Update the trend traces, including marker lines
       (for-each 
@@ -535,24 +562,32 @@
         )
         (append trends (list (list "EventMarker" #f #f #f #f "EventMarker")))
       )
+      
+      (dbln trends)
+
       ;; Reset last update time
       (set! last_trend_update ##now)
       ;; Mark a new logging entry, if one is found
-      (let ((em (store-ref store "EventMarker")))
+      (let ([em (store-ref store "EventMarker")])
         (if em (store-set! store "EventMarker" (if (fl> em 0.) 0. #f)))
       )
     )
+  
   )
+  
   ;(dbln "update-trends : end")
+
 )
 
 ;; (update-values store)
 ;;
 ;; Update the values using data from STORE
 (define (update-values store)
+  
   ;(db "update-values : begin\n")
+  
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
-    (begin
+    
       ;(dbln "trend numerics ...")
       (for-each 
         (lambda (trend)
@@ -562,12 +597,13 @@
               [val (store-timedref store storename #f)]
               [label (store-ref store (string-append name "-value"))]
             )
-            ;(dbln (list "[" name "|" storename "|" val "]")) 
+            ;(dbln (list "[" name "|" storename "|" val "|" label "]")) 
             (glgui-widget-set! gui:trends label 'label (if val (number->string (fix val)) ""))
           )
         )
         trends
       )
+      
       ;(dbln "trend viewer ticks ...")
       (let loop (
           [i 0]
@@ -580,13 +616,17 @@
           )
         )
       )
+      
       ;(dbln "clock ...")
       (glgui-widget-set! gui:main clock 'label (seconds->string ##now "%T"))
+    
     )
+  
   )
+  
   ;(dbln "update-values : end")
-)
 
+)
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
@@ -659,7 +699,7 @@
       (if (pair? rooms) 
         (begin
           (set! or_list (sort (map car rooms) string<?))
-          ;(for-each (lambda (room) (dbln room)) rooms)  ;; display data available for online rooms
+          (for-each (lambda (room) (dbln room)) rooms)  ;; display data available for online rooms
         )
         (begin
           (display "Unable to get location list ... terminating\n")
