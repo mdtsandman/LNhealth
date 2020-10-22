@@ -10,7 +10,7 @@
 
 (define debug #t)
 
-(define server "prod")  ;; "demo" or "prod"
+(define server "demo")  ;; "demo" or "prod"
 
 ;; Dimensions that work with my Lenovo X1 Carbon laptop :)
 (define screen_width 1600) (define screen_height 850)
@@ -38,13 +38,10 @@
 (define subject_location #f) ;; monitoring location for current subject
 
 (define markers_timeline 
-  (list "Bronchoscopy started" "Bronchoscopy ended" "Intubation" "Incision" "Fistula ligation complete" "Surgery ended")
+  (list "Bronchoscopy started" "Bronchoscopy ended" "Intubation" "Surgery started" "Fistula ligation complete" "Surgery ended")
 )
 (define markers_events
   (list (list "Surgery paused:" #f) "Surgery resumed" (list "HFJV paused:" #f) "HFJV resumed")
-)
-(define markers_vent
-  (list (list "PIP" #f) (list "PEEP" #f) (list "RR" #f) (list "Ti" #f) (list "FiO2" #f))
 )
 
 ;; -----------------------------------------------------------------------------
@@ -113,30 +110,17 @@
     )
   )
   
-  ;; LifePulse settings buttons
+  ;; LifePulse settings button
   (let (
-      [n (length markers_vent)]
-      [w 120]
+      [w 180]
       [x (- (glgui-width-get) 180 20)]
       [y (- (glgui-height-get) 85 (* 35 (length markers_timeline)) 15 (* 35 (length markers_events)) 15)]
     )
-    (let loop ([i 0])
-      (if (< i n)
-        (let ([marker (list-ref markers_vent i)])
-          (if marker
-            (let ([str (car marker)])
-              (set! bs (glgui-button-string gui:main x (- y (* 35 i)) w 30 str ascii_16.fnt hfjv-settings-callback))
-              (set! label (glgui-label gui:main (+ x w 15) (- y (* 35 i)) 100 30 "" ascii_24.fnt White))
-              (glgui-widget-set! gui:main bs 'value -1)
-              (glgui-widget-set! gui:main bs 'color Green)
-            )
-          )
-          (loop (+ i 1))
-        )
-      )
-    )
+    (set! bs (glgui-button-string gui:main x y w 30 "HFJV Settings" ascii_16.fnt hfjv-settings-callback))
+    (glgui-widget-set! gui:main bs 'value -1)
+    (glgui-widget-set! gui:main bs 'color Green)
   )
-  
+
   ;; Log widget
   (let (
       [x 1000]
@@ -157,29 +141,57 @@
 
 ;; Other markers
 (define (marker-callback g w t x y)
-  (let* (
-      [idx (glgui-widget-get g w 'value)] 
-      [marker (car (glgui-widget-get g w 'image))]
+  (if 
+    (and
+      (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore when setup dialog visible
+      (glgui-widget-get gui:main gui:hfjv 'hidden)  ;; Ignore when HFJV settings dialog visible
     )
-    (store-event-add store 0 marker)
-    (store-set! store "EventMarker" 1.)
-    (set! quit-armed? #f)
-    (glgui-widget-set! gui:main log-list 'list (build-log-list))
-    (if (string=? marker (car (reverse markers_timeline)))
-      (set! screenshot-time (fl+ ##now 30.))
+    (let* (
+        [idx (glgui-widget-get g w 'value)] 
+        [marker (car (glgui-widget-get g w 'image))]
+      )
+      (store-event-add store 0 marker)
+      (store-set! store "EventMarker" 1.)
+      (set! quit-armed? #f)
+      (glgui-widget-set! gui:main log-list 'list (build-log-list))
+      (if (string=? marker (car (reverse markers_timeline)))
+        (set! screenshot-time (fl+ ##now 30.))
+      )    
     )
-    
   )
 )
 
 (define (marker-freetext-callback g w t x y)
-  (let* (
-      [idx (glgui-widget-get g w 'value)] 
-      [marker (car (glgui-widget-get g w 'image))]
-      [buf (glgui-widget-get gui:main text 'label)]
-    )    
-    (set! buf (string-append marker " "))
-    (glgui-widget-set! g text 'label buf)
+  (if 
+    (and
+      (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore when setup dialog visible
+      (glgui-widget-get gui:main gui:hfjv 'hidden)  ;; Ignore when HFJV settings dialog visible
+    )
+    (let* (
+        [idx (glgui-widget-get g w 'value)] 
+        [marker (car (glgui-widget-get g w 'image))]
+        [buf (glgui-widget-get gui:main text 'label)]
+      )
+      (set! buf (string-append marker " "))
+      (glgui-widget-set! g text 'label buf)
+    )
+  )
+)
+
+(define (hfjv-settings-callback g w t x y)
+  (if 
+    (and
+      (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore when setup dialog visible
+      (glgui-widget-get gui:main gui:hfjv 'hidden)  ;; Ignore when HFJV settings dialog visible
+    )
+    (begin
+      (glgui-widget-set! gui:main text 'focus #f)
+      (glgui-widget-set! gui:main gui:hfjv 'hidden #f)
+      (glgui-widget-set! gui:hfjv hfjv_oxy 'focus #t)
+      (glgui-widget-set! gui:hfjv hfjv_pip 'focus #f)
+      (glgui-widget-set! gui:hfjv hfjv_ti 'focus #f)
+      (glgui-widget-set! gui:hfjv hfjv_rate 'focus #f)
+    )
   )
 )
 
@@ -285,22 +297,6 @@
   ;(dbln "init-gui-setup: end")
 )
 
-;; (hfjv-settings-callback g w t x y)
-;; (list "PIPhfjv" "Tihfjv" "RRhfjv" "FiO2hfjv")
-(define (hfjv-settings-callback g w t x y)
-  (set! pip  (string->number (glgui-widget-get gui:setup hfjv_pip  'label)))
-  (set! fio2 (string->number (glgui-widget-get gui:setup hfjv_fio2 'label)))
-  (set! rate (string->number (glgui-widget-get gui:setup hfjv_rate 'label)))
-  (set! ti   (string->number (glgui-widget-get gui:setup hfjv_ti   'label)))
-  (let* (
-      [idx (glgui-widget-get g w 'value)] 
-      [buf (glgui-widget-get gui:main text 'label)]
-    )    
-    (set! buf (string-append marker " "))
-    (glgui-widget-set! g text 'label buf)
-  )
-)
-
 ;; (location-callback g w t x y)
 ;;
 ;; Select the OR room to monitor
@@ -400,6 +396,75 @@
 
 )
 
+;; -----------------------------------------------------------------------------
+;; HFJV SETTINGS
+;; -----------------------------------------------------------------------------
+
+(define (init-gui-hfjv)
+  
+  (dbln "init-gui-hfjv: begin")
+
+  (let* (
+      [w 300]
+      [h 270]
+      [x (+ 1000 (/ (- 380 w) 2))]
+      [y (- (/ (glgui-height-get) 2) (/ h 2))]
+    ) 
+      
+    (set! gui:hfjv (glgui-container gui:main x y w h))
+    (glgui-box gui:hfjv 0 0 w h CornflowerBlue)
+
+    ;; title
+    (set! title_label (glgui-label gui:hfjv 20 (- h 45) (- w 40) 25 "HFJV Settings" ascii_24.fnt White))
+    (glgui-widget-set! gui:hfjv title_label 'align GUI_ALIGNCENTER)
+     
+    ;; FiO2
+    (set! oxy_label (glgui-label gui:hfjv 20 (- h 55 (* 30 0) 25) 100 30 "FiO2: " ascii_24.fnt White))
+    (glgui-widget-set! gui:hfjv oxy_label 'align GUI_ALIGNRIGHT)
+    (set! hfjv_oxy (glgui-inputlabel gui:hfjv (+ 20 100) (- h 55 (* 30 0) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
+    (glgui-widget-set! gui:hfjv hfjv_oxy 'align GUI_ALIGNRIGHT)
+      
+    ;; PIP
+    (set! pip_label (glgui-label gui:hfjv 20 (- h 55 (* 30  1) 25) 100 30 "PIP: " ascii_24.fnt White))
+    (glgui-widget-set! gui:hfjv pip_label 'align GUI_ALIGNRIGHT)
+    (set! hfjv_pip (glgui-inputlabel gui:hfjv (+ 20 100) (- h 55 (* 30 1) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
+    (glgui-widget-set! gui:hfjv hfjv_pip 'align GUI_ALIGNRIGHT)
+  
+    ;; Ti
+    (set! ti_label (glgui-label gui:hfjv 20 (- h 55 (* 30 2) 25) 100 30 "Ti :" ascii_24.fnt White))
+    (glgui-widget-set! gui:hfjv ti_label 'align GUI_ALIGNRIGHT)
+    (set! hfjv_ti (glgui-inputlabel gui:hfjv (+ 20 100) (- h 55 (* 30 2) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
+    (glgui-widget-set! gui:hfjv hfjv_ti 'align GUI_ALIGNRIGHT)
+      
+    ;; Rate
+    (set! rate_label (glgui-label gui:hfjv 20 (- h 55 (* 30 3) 25) 100 30 "Rate: " ascii_24.fnt White))
+    (glgui-widget-set! gui:hfjv rate_label 'align GUI_ALIGNRIGHT)
+    (set! hfjv_rate (glgui-inputlabel gui:hfjv (+ 20 100) (- h 55 (* 30 3) 25) (- w 40 100) 25 "" ascii_24.fnt White (color-shade White 0.2)))
+    (glgui-widget-set! gui:hfjv hfjv_rate 'align GUI_ALIGNRIGHT)
+
+    ;; OK button
+    (set! ok_btn (glgui-button-string gui:hfjv (- (/ w 2) (/ 180 2)) 20 180 40 "OK" ascii_24.fnt hfjv-settings-confirm-callback))
+    (glgui-widget-set! gui:hfjv ok_btn 'align GUI_ALIGNCENTER)
+      
+    ;; Dialog should be hidden initially
+    (glgui-widget-set! gui:main gui:hfjv 'hidden #t)
+    
+  )
+
+  (dbln "init-gui-hfjv: end")
+
+)
+
+;; (hfjv-settings-confirm-callback g w t x y)
+(define (hfjv-settings-confirm-callback g w t x y)
+  (store-set! store "PIPhfjv"  (string->number (glgui-widget-get gui:hfjv hfjv_pip  'label)))
+  (store-set! store "Tihfjv"   (string->number (glgui-widget-get gui:hfjv hfjv_oxy  'label)))
+  (store-set! store "RRhfjv"   (string->number (glgui-widget-get gui:hfjv hfjv_rate 'label)))
+  (store-set! store "FiO2hfjv" (string->number (glgui-widget-get gui:hfjv hfjv_ti   'label)))
+  (glgui-widget-set! gui:main gui:hfjv 'hidden #t)
+  (glgui-widget-set! gui:main text 'focus #t)
+)
+
 
 ;; -----------------------------------------------------------------------------
 ;; TRENDS
@@ -429,17 +494,6 @@
     (list "peep_imv"   0     35   White       label_peep_imv.img  "PEEP"      8.3      90       8)
   )
 )
-
-(define hfjv_settings 
-  (list
-;;        name        color   label.img           storename   yoffset  
-    (list "rr_hfjv"   White   label_hr.img        "HR"        1)
-    (list "ti_hfjv"   White   label_spo2.img      "SpO2"      3)
-    (list "pip_hfjv"  White   label_pulse.img     "PRSpO2"    1.3)
-    (list "fio2_hfjv" White   label_map_nibp.img  "NBPmean"   2.3)
-  )
-)
-
 
 (define (make-trends g x y0 s vars)
   ;(dbln "make-trends: begin")
@@ -481,8 +535,6 @@
   (set! gui:trends (make-glgui))
   ;iVue trends
   (set! gui:trends-h (make-trends gui:trends 0 (- (glgui-height-get) 50) store trends))
-  ;HFJV settings
-  (make-hfjv-settings-trends gui:main store trends)
   ;Event markers
   (let ( 
       [trace
@@ -587,7 +639,9 @@
   ;(db "update-values : begin\n")
   
   (if (fl>= (fl- ##now (store:instance-ref store "DispatchStart" 0.)) (store:instance-ref store "DispatchCount" 0.))
-    
+   
+    (begin
+
       ;(dbln "trend numerics ...")
       (for-each 
         (lambda (trend)
@@ -714,6 +768,7 @@
     ;; Initialize the gui
     (init-gui-main)
     (init-gui-setup)
+    (init-gui-hfjv)
     (init-gui-trends)
 
     ;; Start the scheduler
@@ -728,7 +783,10 @@
     (update-values "main")
     
     (if (= t EVENT_KEYPRESS)
-      (if (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
+      (if (and 
+          (glgui-widget-get gui:main gui:setup 'hidden) ;; Ignore keypresses when setup dialog visible
+          (glgui-widget-get gui:main gui:hfjv 'hidden)  ;; Ignore keypresses when HFJV settings dialog visible
+        )
         (cond 
           [(and (= x EVENT_KEYESCAPE) quit_armed?)
             (terminate) ;; ESC (x2 consecutive) terminates program
